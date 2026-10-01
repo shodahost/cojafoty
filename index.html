@@ -92,12 +92,13 @@ header p{color:var(--muted);max-width:60ch}
 
 /* ekran aparatu */
 .cam{background:var(--term-bg);color:var(--term-fg);border-radius:12px;font-family:var(--f-mono);padding:10px 14px 6px;font-variant-numeric:tabular-nums}
-.camrow{display:flex;gap:6px 16px;flex-wrap:wrap;align-items:baseline;font-size:17px}
-.cmode{background:#ffffff1f;border-radius:6px;padding:0 7px;font-weight:600}
+.camrow{display:flex;gap:4px clamp(6px,2.4vw,16px);flex-wrap:wrap;align-items:baseline;font-size:clamp(12px,3.7vw,17px);letter-spacing:-.02em}
+.cmode{background:#ffffff1f;border-radius:6px;padding:0 6px;font-weight:600}
 .cv{white-space:nowrap}
 .cv.hot{color:var(--cam-acc);font-weight:600}
-.cv.auto{color:#C9CEDA}
-.cv.auto::after{content:"auto";font-size:10px;color:var(--term-dim);margin-left:3px;vertical-align:super}
+.cv.auto{color:#C9CEDA;text-decoration:underline dotted #7C8396;text-underline-offset:4px}
+.cv.auto::after{content:"A";font-size:.62em;color:var(--term-dim);margin-left:1px;vertical-align:super}
+.camleg{font-size:11px;color:var(--term-dim);margin-top:2px}
 .cv.blink{color:#FF7B7B;animation:blink 1s steps(2) infinite}
 @keyframes blink{50%{opacity:.35}}
 .meter{position:relative;height:34px;margin:6px 12px 0}
@@ -119,7 +120,7 @@ header p{color:var(--muted);max-width:60ch}
 .ctl{display:flex;flex-direction:column;gap:2px;min-width:0}
 .ctlhead{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
 .ctlhead label{font-weight:700}
-.ctl.auto .ctlhead label::after{content:" · ustawia aparat";font-weight:400;color:var(--muted);font-size:14px}
+.ctl.auto .ctlhead label::after{content:" · aparat";font-weight:400;color:var(--muted);font-size:14px}
 .val{font-family:var(--f-mono);font-weight:600;color:var(--accent);font-variant-numeric:tabular-nums;white-space:nowrap}
 input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:32px;background:transparent;margin:0;cursor:pointer;touch-action:pan-y}
 input[type=range]::-webkit-slider-runnable-track{height:8px;border-radius:99px;background:var(--line)}
@@ -910,11 +911,12 @@ function makeCam(host,meter){
   const d=document.createElement('div');d.className='cam';
   let ticks='';
   if(meter!==false)for(let q=-9;q<=9;q++){const p=(q+9)/18*100,maj=q%3===0,v=q/3;ticks+=`<span class="mt${maj?'':' mi'}" style="left:${p}%">${maj?(v===0?'0':v===-3?'−3':v===3?'+3':Math.abs(v)):'·'}</span>`;}
-  d.innerHTML=`<div class="camrow"></div>`+(meter!==false?`<div class="meter">${ticks}<span class="mk">▲</span></div>`:'');
+  d.innerHTML=`<div class="camrow"></div><div class="camleg" hidden>A = ustawia aparat</div>`+(meter!==false?`<div class="meter">${ticks}<span class="mk">▲</span></div>`:'');
   host.appendChild(d);
-  const row=d.querySelector('.camrow'),mk_=d.querySelector('.mk');
+  const row=d.querySelector('.camrow'),leg=d.querySelector('.camleg'),mk_=d.querySelector('.mk');
   return{set(o){
     row.innerHTML=(o.mode?`<span class="cmode">${o.mode}</span>`:'')+(o.vals||[]).map(v=>`<span class="cv${v[1]?' '+v[1]:''}">${v[0]}</span>`).join('');
+    leg.hidden=!(o.vals||[]).some(v=>v[1]==='auto'||v[1]==='blink');
     if(mk_&&o.off!=null){const c=clamp(o.off,-3,3);mk_.style.left=((c+3)/6*100)+'%';mk_.classList.toggle('zero',Math.abs(o.off)<.17);mk_.classList.toggle('out',Math.abs(o.off)>3);mk_.textContent=o.off>3?'▶':o.off<-3?'◀':'▲';}
     d.setAttribute('aria-label','Ekran aparatu: '+(o.mode||'')+' '+(o.vals||[]).map(v=>v[0]).join(', ')+(o.off!=null?', wskaźnik '+fmtThird(clamp(Math.round(o.off*3)/3,-3,3)):''));
   }};
@@ -1148,7 +1150,7 @@ onShow('sim-comp',()=>{
   function upd(){
     const c=vals[sl.get()],S=scene(sc),meterOff=Math.log2(.18/S.avg),err=meterOff+c,gain=Math.pow(2,err),cf=CFG[sc];
     const x=ctxOf(F.cv);x.drawImage(S.c,0,0);develop(x,{gain});
-    cam.set({mode:'Av',vals:[[cf.f],[thirdTime(cf.t0+err),'auto'],[cf.iso],['±'+fmtThird(c),'hot']],off:c});
+    cam.set({mode:'Av',vals:[[cf.f],[thirdTime(cf.t0+err),'auto'],[cf.iso]],off:c});
     const good=Math.abs(err)<=.34;
     F.say(`Kompensacja <b>${fmtThird(c)}</b>, aparat ustawił czas ${thirdTime(cf.t0+err)}. `+(sc==='snow'?(good?'<span class="g">Śnieg jest biały.</span>':err<0?'Śnieg wyszedł szary, za ciemno.':'Za jasno, śnieg traci szczegóły.'):(good?'<span class="g">Kot jest czarny.</span>':err>0?'Czarny kot wyszedł szary, za jasno.':'Za ciemno, kot znika w cieniu.')));
     if(good){if(sc==='snow')okSnow=true;else okCat=true;}
