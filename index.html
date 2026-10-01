@@ -1,0 +1,1222 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Aparat krok po kroku</title>
+<meta name="description" content="Interaktywny przewodnik po przesłonie, czasie naświetlania i ISO dla Canon EOS R z obiektywem RF 24-105.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='4' y='14' width='56' height='40' rx='8' fill='%23C25A0E'/%3E%3Crect x='20' y='8' width='18' height='10' rx='3' fill='%23C25A0E'/%3E%3Ccircle cx='32' cy='34' r='13' fill='%23fff'/%3E%3Ccircle cx='32' cy='34' r='7' fill='%23171A22'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Jeden krok na ekran, pasek postępu u góry, symulatory na canvasie liczone ze stopni (log2) */
+:root{
+  --bg:#EEF0F4; --surface:#FFFFFF; --sunk:#E5E8EE; --fg:#171A22; --muted:#596071; --line:#D2D7E1;
+  --accent:#C25A0E; --accent-soft:#FFE8D4; --mark:#FFD84A; --mark-fg:#171A22;
+  --add:#1E8A4C; --add-bg:#DDF4E6; --del:#C93B3B; --del-bg:#FBE1E1; --warn:#946400; --warn-bg:#FFF3CF;
+  --term-bg:#15171D; --term-fg:#EDEFF4; --term-dim:#8E95A6; --cam-acc:#FFA94D; --cam-ok:#5ED68F;
+  --f-display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body:"Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  --f-mono:"JetBrains Mono", ui-monospace, Consolas, monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#111318; --surface:#1A1D24; --sunk:#0E1014; --fg:#ECEEF3; --muted:#A0A7B6; --line:#2D323D;
+  --accent:#FF9F55; --accent-soft:#3A2616; --mark:#FFD84A; --mark-fg:#171A22;
+  --add:#5ED68F; --add-bg:#15321F; --del:#FF7B7B; --del-bg:#3A1A1C; --warn:#F2B44C; --warn-bg:#35280F;
+  --term-bg:#0A0B0E; --term-fg:#EDEFF4; --term-dim:#7C8396; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111318; --surface:#1A1D24; --sunk:#0E1014; --fg:#ECEEF3; --muted:#A0A7B6; --line:#2D323D;
+  --accent:#FF9F55; --accent-soft:#3A2616; --mark:#FFD84A; --mark-fg:#171A22;
+  --add:#5ED68F; --add-bg:#15321F; --del:#FF7B7B; --del-bg:#3A1A1C; --warn:#F2B44C; --warn-bg:#35280F;
+  --term-bg:#0A0B0E; --term-fg:#EDEFF4; --term-dim:#7C8396; color-scheme:dark}
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:17px;line-height:1.6;padding-inline:max(16px,env(safe-area-inset-left));padding-block:20px 60px;overflow-x:hidden}
+.wrap{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;line-height:1.15;margin:0}
+p{margin:0}
+code{font-family:var(--f-mono);font-size:.88em;background:var(--sunk);padding:.1em .35em;border-radius:5px}
+.hl{background:var(--mark);color:var(--mark-fg);padding:0 .25em;border-radius:3px;font-weight:700}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+
+/* nagłówek */
+header{display:flex;flex-direction:column;gap:6px}
+.eyebrow{font-family:var(--f-mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);font-weight:600}
+header h1{font-size:clamp(32px,7vw,48px);font-weight:800;letter-spacing:-.025em}
+header p{color:var(--muted);max-width:60ch}
+
+/* pasek postępu */
+.rail{position:sticky;top:0;z-index:5;background:var(--bg);padding-block:max(10px,env(safe-area-inset-top)) 10px;display:flex;flex-direction:column;gap:8px}
+.dots{display:flex;gap:4px}
+.dots button{flex:1;height:12px;border-radius:99px;border:0;background:var(--line);cursor:pointer;padding:0;min-width:0}
+.dots button.ex{background:repeating-linear-gradient(90deg,var(--line) 0 4px,transparent 4px 6px),var(--sunk)}
+.dots button.done{background:var(--add)}
+.dots button.cur{background:var(--accent);outline:2px solid var(--accent);outline-offset:2px}
+.railinfo{display:flex;justify-content:space-between;gap:10px;font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums}
+.railinfo span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.railinfo span:last-child{flex:none}
+
+/* karta */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:clamp(16px,4vw,32px);display:flex;flex-direction:column;gap:18px;min-width:0}
+.card.ex{border:2px dashed var(--accent)}
+.card .num{font-family:var(--f-mono);font-size:13px;color:var(--muted)}
+.card .num b{color:var(--accent);font-weight:600}
+.card h2{font-size:clamp(24px,5vw,32px);font-weight:700}
+.why{font-size:18px}
+.why b{color:var(--accent)}
+.box{border-radius:12px;padding:14px 16px;display:flex;gap:12px;align-items:flex-start}
+.box .ic{font-family:var(--f-display);font-weight:800;line-height:1;flex:none;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-size:14px;margin-top:1px}
+.tip{background:var(--accent-soft)} .tip .ic{background:var(--accent);color:var(--surface)}
+.warn{background:var(--warn-bg)} .warn .ic{background:var(--warn);color:var(--surface)}
+.ok{background:var(--add-bg)} .ok .ic{background:var(--add);color:var(--surface)}
+.box > div{min-width:0}
+.lbl{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.hint{font-size:15px;color:var(--muted)}
+.goal{animation:pop .35s ease}
+@keyframes pop{from{transform:scale(.96);opacity:.3}to{transform:none;opacity:1}}
+
+/* trzy strefy */
+.zones{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;gap:8px;align-items:stretch}
+.zone{border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:6px;border:2px dashed var(--line);background:var(--sunk);min-width:0}
+.zone h3{font-size:17px}
+.zone small{color:var(--muted);font-size:14px;line-height:1.4}
+.zone .big{font-size:28px;line-height:1}
+.zone .cost{font-size:14px;font-weight:700;color:var(--accent)}
+.arrow{display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:var(--f-mono);font-size:12px;color:var(--accent);font-weight:600;text-align:center}
+.arrow span{font-size:22px;line-height:1}
+@media (max-width:620px){.zones{grid-template-columns:1fr}.arrow span{transform:rotate(90deg)}}
+
+/* ekran aparatu */
+.cam{background:var(--term-bg);color:var(--term-fg);border-radius:12px;font-family:var(--f-mono);padding:10px 14px 6px;font-variant-numeric:tabular-nums}
+.camrow{display:flex;gap:6px 16px;flex-wrap:wrap;align-items:baseline;font-size:17px}
+.cmode{background:#ffffff1f;border-radius:6px;padding:0 7px;font-weight:600}
+.cv{white-space:nowrap}
+.cv.hot{color:var(--cam-acc);font-weight:600}
+.cv.auto{color:#C9CEDA}
+.cv.auto::after{content:"auto";font-size:10px;color:var(--term-dim);margin-left:3px;vertical-align:super}
+.cv.blink{color:#FF7B7B;animation:blink 1s steps(2) infinite}
+@keyframes blink{50%{opacity:.35}}
+.meter{position:relative;height:34px;margin:6px 12px 0}
+.meter .mt{position:absolute;top:0;transform:translateX(-50%);font-size:12px;color:#B5BBC8;line-height:1}
+.meter .mt.mi{color:#6E7588}
+.meter .mk{position:absolute;top:17px;transform:translateX(-50%);color:var(--cam-acc);font-size:13px;line-height:1;transition:left .15s ease}
+.meter .mk.zero{color:var(--cam-ok)}
+.meter .mk.out{animation:blink 1s steps(2) infinite}
+.camcap{font-size:13px;color:var(--term-dim);padding-bottom:4px}
+
+/* symulator */
+.sim{border:2px solid var(--accent);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.view{position:relative;border-radius:12px;overflow:hidden;background:#000;min-width:0}
+.view canvas{display:block;width:100%;height:auto;aspect-ratio:16/10}
+.view .tag{position:absolute;left:8px;top:8px;font-family:var(--f-mono);font-size:12px;background:#000000a0;color:#fff;border-radius:6px;padding:2px 7px}
+.apview{display:grid;grid-template-columns:minmax(80px,1fr) 3fr;gap:10px;align-items:center}
+.apview svg{width:100%;height:auto;display:block}
+.ctls{display:flex;flex-direction:column;gap:16px}
+.ctl{display:flex;flex-direction:column;gap:2px;min-width:0}
+.ctlhead{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.ctlhead label{font-weight:700}
+.ctl.auto .ctlhead label::after{content:" · ustawia aparat";font-weight:400;color:var(--muted);font-size:14px}
+.val{font-family:var(--f-mono);font-weight:600;color:var(--accent);font-variant-numeric:tabular-nums;white-space:nowrap}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:32px;background:transparent;margin:0;cursor:pointer;touch-action:pan-y}
+input[type=range]::-webkit-slider-runnable-track{height:8px;border-radius:99px;background:var(--line)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;border-radius:50%;background:var(--accent);border:3px solid var(--surface);margin-top:-9px;box-shadow:0 0 0 1.5px var(--accent)}
+input[type=range]::-moz-range-track{height:8px;border-radius:99px;background:var(--line)}
+input[type=range]::-moz-range-thumb{width:20px;height:20px;border-radius:50%;background:var(--accent);border:3px solid var(--surface);box-shadow:0 0 0 1.5px var(--accent)}
+input[type=range]:disabled{cursor:default}
+input[type=range]:disabled::-webkit-slider-thumb{background:var(--muted);box-shadow:0 0 0 1.5px var(--muted)}
+input[type=range]:disabled::-moz-range-thumb{background:var(--muted)}
+.ruler{position:relative;height:16px;font-family:var(--f-mono);font-size:11px;color:var(--muted);line-height:1}
+.ruler span{position:absolute;top:0;left:calc(13px + (100% - 26px) * var(--p));transform:translateX(-50%);white-space:nowrap}
+.ruler span.on{color:var(--accent);font-weight:600}
+.ruler span.dim{opacity:.5}
+.rulerdir{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:2px}
+@media (max-width:560px){
+  .ruler.dense span:nth-child(even):not(.on){visibility:hidden}
+  .ruler.dense span:has(+ span.on),.ruler.dense span.on + span{visibility:hidden}
+}
+.simlog{font-family:var(--f-mono);font-size:13.5px;line-height:1.5;background:var(--term-bg);color:var(--term-fg);border-radius:10px;padding:10px 12px;min-height:48px}
+.simlog b{color:var(--cam-acc)}
+.simlog .g{color:var(--cam-ok)}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+.btn{font-family:var(--f-body);font-weight:700;font-size:15px;border-radius:10px;padding:9px 14px;border:2px solid var(--fg);background:var(--surface);color:var(--fg);cursor:pointer;min-height:44px}
+.btn:hover{background:var(--sunk)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.small{font-size:14px;padding:6px 10px;min-height:38px}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.seg{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.seg .lbl{margin-right:4px}
+.seg button{font-family:var(--f-body);font-weight:700;font-size:14px;border-radius:99px;padding:6px 14px;border:2px solid var(--line);background:var(--surface);color:var(--fg);cursor:pointer;min-height:38px}
+.seg button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+.sw{display:inline-flex;gap:10px;align-items:center;font-weight:700;cursor:pointer;min-height:38px}
+.sw input{width:22px;height:22px;accent-color:var(--accent);margin:0}
+.btn:focus-visible,.dots button:focus-visible,.seg button:focus-visible,.sw input:focus-visible,.check input:focus-visible,summary:focus-visible,input[type=range]:focus-visible,a:focus-visible,.linkbtn:focus-visible{outline:3px solid var(--mark);outline-offset:2px}
+.tasks{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.tasks li{display:flex;gap:10px;align-items:flex-start;font-size:15px;background:var(--sunk);border-radius:10px;padding:8px 10px}
+.tasks li .st{flex:none;width:22px;height:22px;border-radius:50%;border:2px solid var(--line);display:grid;place-items:center;font-size:13px;font-weight:700;margin-top:1px}
+.tasks li.did .st{background:var(--add);border-color:var(--add);color:var(--surface)}
+.tasks li.did{color:var(--muted)}
+
+/* ściągi, kafelki */
+.cheat{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}
+.cheat div{background:var(--sunk);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:4px;min-width:0}
+.cheat b{font-family:var(--f-mono);font-weight:600;color:var(--accent);font-size:15px;overflow-wrap:anywhere}
+.cheat span{font-size:15px;color:var(--muted);line-height:1.45}
+.cheat em{font-style:normal;color:var(--fg);font-weight:700}
+
+/* drabinka stopni */
+.ladder{display:flex;flex-direction:column;gap:10px;background:var(--sunk);border-radius:12px;padding:12px}
+.ladder .row{display:flex;flex-direction:column;gap:4px}
+.ladder .rn{font-size:13px;font-weight:700;color:var(--muted)}
+.ladder .cells{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.ladder .cells span{font-family:var(--f-mono);font-size:13px;text-align:center;background:var(--surface);border-radius:6px;padding:4px 0;white-space:nowrap;overflow:hidden}
+.ladder .dir{display:flex;justify-content:space-between;font-size:12px;color:var(--muted)}
+@media (max-width:420px){.ladder .cells span{font-size:11px}}
+.xrow{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center}
+.xrow .mid{text-align:center;display:flex;flex-direction:column;line-height:1.25}
+.xrow .mid b{font-family:var(--f-mono);font-size:18px;color:var(--accent)}
+.xrow .mid small{font-size:13px;color:var(--muted)}
+.xrow .btn{min-width:84px}
+.ledger{font-family:var(--f-mono);font-size:14px;background:var(--sunk);border-radius:10px;padding:8px 12px;display:flex;flex-wrap:wrap;gap:4px 14px}
+.ledger .p{color:var(--add);font-weight:600} .ledger .n{color:var(--del);font-weight:600}
+
+/* przed / po */
+.ba{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.ba figure{margin:0;display:flex;flex-direction:column;gap:4px;min-width:0}
+.ba canvas{display:block;width:100%;height:auto;aspect-ratio:16/10;border-radius:10px;background:#000}
+.ba figcaption{font-family:var(--f-mono);font-size:13px;color:var(--muted);text-align:center}
+.ba figcaption b{color:var(--accent)}
+
+/* ćwiczenia */
+.check{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;counter-reset:c}
+.check label{display:flex;gap:12px;align-items:flex-start;background:var(--sunk);border-radius:12px;padding:10px 12px;cursor:pointer}
+.check input{width:22px;height:22px;accent-color:var(--add);flex:none;margin:2px 0 0}
+.check input:checked + span{color:var(--muted)}
+.check .n{font-family:var(--f-mono);color:var(--accent);font-weight:600;margin-right:4px}
+
+/* quiz, faq */
+.quizq{display:flex;flex-direction:column;gap:10px}
+.quizopts{display:flex;flex-direction:column;gap:8px}
+.quizopts .btn{text-align:left;border-width:2px}
+.quizopts .btn.right{background:var(--add-bg);border-color:var(--add);color:var(--fg)}
+.quizopts .btn.wrong{background:var(--del-bg);border-color:var(--del);color:var(--fg)}
+.faq{display:flex;flex-direction:column;gap:8px}
+.faq details{background:var(--sunk);border-radius:10px;padding:10px 14px}
+.faq summary{cursor:pointer;font-weight:700}
+.faq p{margin-top:8px}
+
+/* nawigacja */
+.nav{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center}
+.nav .btn{min-width:120px}
+.nav #done{justify-self:center}
+.donebtn.is{background:var(--add);border-color:var(--add);color:var(--surface)}
+@media (max-width:480px){.nav{grid-template-columns:1fr 1fr}.nav #done{grid-column:1 / -1;grid-row:2;justify-self:stretch}.nav .btn{min-width:0}}
+.kbd{font-size:13px;color:var(--muted);text-align:center}
+.foot{font-size:13px;color:var(--muted);text-align:center;display:flex;flex-direction:column;gap:4px;align-items:center}
+.linkbtn{background:none;border:0;color:var(--muted);text-decoration:underline;font:inherit;cursor:pointer;padding:4px}
+
+@media (prefers-reduced-motion:reduce){
+  *{animation:none!important;transition:none!important}
+  html{scroll-behavior:auto}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="eyebrow">Przewodnik · 18 kroków · Canon EOS R + RF 24-105</span>
+    <h1>Aparat krok po kroku</h1>
+    <p>Krótkie kroki na 2–5 minut każdy. Czytasz, przesuwasz suwaki, a co kilka kroków bierzesz aparat do ręki i sprawdzasz to na żywo.</p>
+  </header>
+
+  <div class="rail">
+    <div class="dots" id="dots" role="group" aria-label="Postęp"></div>
+    <div class="railinfo"><span id="railtxt">Krok 1 z 18</span><span id="railpct">0% zrobione</span></div>
+  </div>
+
+  <main id="lessons">
+
+  <!-- 1 -->
+  <section class="card" data-title="Porcja światła">
+    <span class="num">KROK 1</span>
+    <h2>Zdjęcie to porcja światła</h2>
+    <p class="why">W ciemnym pokoju widzisz mało, w słońcu mrużysz oczy od blasku. Aparat ma tak samo: każde zdjęcie to <b>porcja światła</b>, która wpadła do środka.</p>
+    <p>Za mało światła: zdjęcie jest ciemne. Za dużo: jasne i wypalone, z białymi plamami bez szczegółów. Ilość światła, która trafia na matrycę, to <span class="hl">ekspozycja</span>.</p>
+    <div class="sim" id="sim-exp">
+      <div class="view"><canvas width="640" height="400" role="img" aria-label="Symulowane zdjęcie osoby w parku"></canvas></div>
+      <div class="camhost"></div>
+      <div class="ctls"></div>
+      <div class="simlog" aria-live="polite"></div>
+      <div class="btns"><button class="btn reset">↺ Od nowa</button></div>
+    </div>
+    <p class="hint">Spróbuj: ustaw suwak tak, żeby znacznik na ekranie aparatu stanął dokładnie na 0.</p>
+    <div class="box ok goal" hidden><span class="ic">✓</span><div>Tak wygląda dobrze naświetlone zdjęcie. Tę samą skalę <code>-3..2..1..0..1..2..+3</code> zobaczysz w wizjerze swojego Canona.</div></div>
+    <div class="box tip"><span class="ic">i</span><div>Symulacje w tym przewodniku to uproszczone modele. Pokazują <b>kierunek zmian</b>, a nie wierną kopię prawdziwego zdjęcia.</div></div>
+  </section>
+
+  <!-- 2 -->
+  <section class="card" data-title="Trzy pokrętła" hidden>
+    <span class="num">KROK 2</span>
+    <h2>Trzy sposoby na więcej światła</h2>
+    <p class="why">Twoje oko w ciemności rozszerza źrenicę i dłużej się wpatruje. Aparat ma na to <b>trzy pokrętła</b>.</p>
+    <div class="zones">
+      <div class="zone"><span class="big">👁️</span><h3>Przesłona</h3><small>Źrenica: jak szeroki jest otwór w obiektywie.</small><span class="cost">+ rozmycie tła</span></div>
+      <div class="arrow"><span>→</span>światło</div>
+      <div class="zone"><span class="big">⏱️</span><h3>Czas</h3><small>Mrugnięcie: jak długo aparat ma „otwarte oko”.</small><span class="cost">+ smuga przy ruchu</span></div>
+      <div class="arrow"><span>→</span>światło</div>
+      <div class="zone"><span class="big">🔊</span><h3>ISO</h3><small>Podgłośnienie: rozjaśnia to, co już wpadło.</small><span class="cost">+ szum (ziarno)</span></div>
+    </div>
+    <p>Każde pokrętło dodaje albo zabiera światło. Ale każde robi też coś jeszcze. Cała sztuka to wiedzieć, <span class="hl">jaką cenę płacisz</span> za jasność.</p>
+    <div id="cam-static"></div>
+    <p class="hint">Tak wygląda dół ekranu w Twoim EOS R: tryb, przesłona, czas, ISO i wskaźnik ekspozycji. Trzy liczby = trzy pokrętła.</p>
+    <div class="box tip"><span class="ic">i</span><div>W kolejnych krokach poznasz każde pokrętło osobno, a potem wszystkie razem.</div></div>
+  </section>
+
+  <!-- 3 -->
+  <section class="card" data-title="Przesłona" hidden>
+    <span class="num">KROK 3</span>
+    <h2>Przesłona to źrenica aparatu</h2>
+    <p class="why">W ciemności Twoja źrenica robi się duża, w słońcu malutka. W obiektywie jest taki sam regulowany otwór: <b>przesłona</b>.</p>
+    <div class="sim" id="sim-ap">
+      <div class="apview">
+        <svg viewBox="0 0 200 200" role="img" aria-label="Otwór przesłony"><defs><radialGradient id="apsky" cx="50%" cy="40%" r="60%"><stop offset="0" stop-color="#DDEFFB"/><stop offset="1" stop-color="#6FAEE0"/></radialGradient></defs><circle cx="100" cy="100" r="98" fill="#24262C"/><circle cx="100" cy="100" r="90" fill="url(#apsky)"/><path id="blades" fill="#3A3D45" fill-rule="evenodd" stroke="#55585F" stroke-width="1"/><circle cx="100" cy="100" r="90" fill="none" stroke="#111" stroke-width="4"/></svg>
+        <div class="view"><canvas width="640" height="400" role="img" aria-label="Symulowane zdjęcie"></canvas></div>
+      </div>
+      <div class="camhost"></div>
+      <div class="ctls"></div>
+      <div class="simlog" aria-live="polite"></div>
+      <div class="btns"><button class="btn reset">↺ Od nowa</button></div>
+    </div>
+    <p class="hint">Spróbuj: znajdź liczbę f, przy której wskaźnik stoi na 0.</p>
+    <div class="box ok goal" hidden><span class="ic">✓</span><div>Jest! Przy f/5.6 światła jest w sam raz. Zauważ, że tło też się zmieniało. To temat następnego kroku.</div></div>
+    <div class="box warn"><span class="ic">!</span><div><b>Pułapka:</b> mniejsza liczba = <b>większy</b> otwór. f/4 to duża dziura, f/22 to dziurka od szpilki. Jak zapamiętać: to ułamek. f/4 to „jedna czwarta”, f/22 to „jedna dwudziesta druga”. Ćwiartka tortu jest większa niż kawałek z 22.</div></div>
+    <div class="box tip"><span class="ic">i</span><div><b>Twój obiektyw</b> zaczyna się od f/4. Napis <code>F4 L</code> i czerwony pasek = f/4 przy każdym zoomie. Napis <code>1:4-7.1</code> (wersja STM) = przy 105 mm najmniej f/7.1. Szare liczby na skali (1.4–2.8) mają tylko jaśniejsze obiektywy. „Otworzyć przesłonę” = zmniejszyć liczbę f, „przymknąć” = zwiększyć.</div></div>
+  </section>
+
+  <!-- 4 -->
+  <section class="card" data-title="Rozmyte tło" hidden>
+    <span class="num">KROK 4</span>
+    <h2>Duży otwór = rozmyte tło</h2>
+    <p class="why">Zmruż oczy i spójrz przez maleńką szczelinę między palcami: wszystko robi się ostrzejsze. <b>Mały otwór</b> daje ostrość od przodu do tyłu, duży tylko w jednym miejscu.</p>
+    <p>To, jak gruby „plaster” sceny wychodzi ostro, to <span class="hl">głębia ostrości</span>.</p>
+    <div class="sim" id="sim-dof">
+      <div class="view"><canvas width="640" height="400" role="img" aria-label="Symulowane zdjęcie z rozmyciem tła"></canvas></div>
+      <div class="camhost"></div>
+      <div class="ctls"></div>
+      <div class="simlog" aria-live="polite"></div>
+      <div class="btns"><button class="btn reset">↺ Od nowa</button></div>
+    </div>
+    <p class="hint">Spróbuj: rozmyj tło najmocniej, jak się da, a potem ustaw tak, żeby było całkiem ostre. Jasność się nie zmienia, bo aparat sam dobiera czas (to tryb Av, zaraz go użyjesz).</p>
+    <div class="box ok goal" hidden><span class="ic">✓</span><div>Mała liczba f = rozmyte tło (portret). Duża liczba f = wszystko ostre (pejzaż). Zobacz też, jak przy f/22 czas wydłużył się do 1/8 s.</div></div>
+    <div class="cheat">
+      <div><b>f/1.4 – f/2.8</b><span>mocno rozmyte tło (jaśniejsze obiektywy)</span></div>
+      <div><b>f/4 – f/5.6</b><span>lekko rozmyte, <em>Twój start do portretów</em></span></div>
+      <div><b>f/8 – f/11</b><span>prawie wszystko ostre, pejzaż, grupa</span></div>
+      <div><b>f/16 – f/22</b><span>wszystko ostre, mało światła</span></div>
+    </div>
+    <div class="box tip"><span class="ic">i</span><div>Tło rozmyje się mocniej także, gdy <b>podejdziesz bliżej</b> osoby, gdy <b>tło jest daleko</b> za nią i gdy użyjesz <b>dłuższej ogniskowej</b> (105 mm). Przy f/4 to Twoje główne sztuczki.</div></div>
+  </section>
+
+  <!-- 5 -->
+  <section class="card ex" data-title="Ćwiczenie: kubek" data-ex hidden>
+    <span class="num">KROK 5 · <b>ĆWICZENIE Z APARATEM</b></span>
+    <h2>Kubek z rozmytym tłem</h2>
+    <p class="why">Czas na prawdziwy aparat. 5 minut, jeden kubek, <b>dwa zdjęcia</b>.</p>
+    <ul class="check" data-chk="c1">
+      <li><label><input type="checkbox"><span><span class="n">1</span>Postaw kubek na stole tak, żeby 2–3 m za nim było coś kolorowego: półka, okno, kwiaty.</span></label></li>
+      <li><label><input type="checkbox"><span><span class="n">2</span>Włącz tryb <code>Av</code>: na górze aparatu naciśnij przycisk <b>MODE</b> i obróć pokrętło, aż na ekranie pojawi się <code>Av</code>.</span></label></li>
+      <li><label><input type="checkbox"><span><span class="n">3</span>Obróć pokrętło przy spuście migawki do najmniejszej liczby f, jaka się da (f/4, a w wersji STM przy 105 mm f/7.1). ISO zostaw tak, jak jest.</span></label></li>
+      <li><label><input type="checkbox"><span><span class="n">4</span>Przekręć zoom na <b>105 mm</b> i podejdź do kubka tak blisko, jak się da (aparat musi jeszcze złapać ostrość).</span></label></li>
+      <li><label><input type="checkbox"><span><span class="n">5</span>Dotknij kubka na ekranie, żeby tam ustawić ostrość, i zrób zdjęcie.</span></label></li>
+      <li><label><input type="checkbox"><span><span class="n">6</span>Z tego samego miejsca ustaw <b>f/11</b> i zrób drugie zdjęcie.</span></label></li>
+      <li><label><input type="checkbox"><span><span class="n">7</span>Naciśnij ▶ (podgląd) i porównaj tło na obu zdjęciach.</span></label></li>
+    </ul>
+    <p class="lbl">Czego się spodziewać</p>
+    <div class="ba">
+      <figure><canvas id="ba-f4" width="640" height="400" role="img" aria-label="Przykład: f/4, tło rozmyte"></canvas><figcaption><b>f/4</b> · tło rozmyte</figcaption></figure>
+      <figure><canvas id="ba-f16" width="640" height="400" role="img" aria-label="Przykład: f/16, tło ostre"></canvas><figcaption><b>f/16</b> · tło ostre</figcaption></figure>
+    </div>
+    <div class="box warn"><span class="ic">!</span><div>Przy f/11 aparat może wybrać dłuższy czas, np. 1/30 s, bo otwór jest mniejszy. Trzymaj aparat oburącz i łokcie przy sobie.</div></div>
+    <div class="box ok"><span class="ic">✓</span><div>Tło przy f/4 bardziej rozmyte niż przy f/11? To właśnie zrozumiałaś przesłonę.</div></div>
+  </section>
+
+  <!-- 6 -->
+  <section class="card" data-title="Czas naświetlania" hidden>
+    <span class="num">KROK 6</span>
+    <h2>Czas naświetlania to mrugnięcie aparatu</h2>
+    <p class="why">Przed matrycą jest kurtyna, <b>migawka</b>. Otwiera się na chwilę i zamyka, jak mrugnięcie. Ta chwila to czas naświetlania.</p>
+    <p>Dłużej otwarte = więcej światła. Ale wszystko, co się w tym czasie rusza, zostawia <span class="hl">smugę</span>.</p>
+    <div class="sim" id="sim-sh">
+      <div class="view"><canvas width="640" height="400" role="img" aria-label="Symulowane zdjęcie biegnącego psa"></canvas></div>
+      <div class="camhost"></div>
+      <div class="ctls"></div>
+      <div class="simlog" aria-live="polite"></div>
+      <div class="btns"><button class="btn reset">↺ Od nowa</button></div>
+    </div>
+    <p class="hint">Spróbuj: zamroź psa, żeby nie było smugi. Zerknij przy tym na wskaźnik. (Na skali pod suwakiem jest sam mianownik, jak na ekranie aparatu: 125 = 1/125 s.)</p>
+    <div class="box ok goal" hidden><span class="ic">✓</span><div>Pies zamrożony! Ale zdjęcie zrobiło się ciemne. Jak mieć jedno i drugie, zobaczysz w kroku 12.</div></div>
+    <div class="cheat">
+      <div><b>1/1000</b><span>ptak w locie, szybki sport</span></div>
+      <div><b>1/500</b><span>bieg, zabawa dzieci</span></div>
+      <div><b>1/250</b><span>spacer, zwierzę w ruchu</span></div>
+      <div><b>1/125</b><span>ludzie stojący, rozmowa</span></div>
+      <div><b>1/60</b><span>spokojne sceny, trzymaj mocno</span></div>
+      <div><b>1/15 i dłużej</b><span>statyw albo oparcie aparatu</span></div>
+    </div>
+    <div class="box tip"><span class="ic">i</span><div><code>1/125</code> to jedna sto dwudziesta piąta sekundy. <b>Im większa liczba pod kreską, tym krócej.</b> Na ekranie bywa samo <code>125</code>. Sekundy mają cudzysłów: <code>2"</code> to dwie sekundy, <code>0"5</code> to pół sekundy.</div></div>
+  </section>
+
+  <!-- 7 -->
+  <section class="card" data-title="Ogniskowa" hidden>
+    <span class="num">KROK 7</span>
+    <h2>Zoom: szeroko z bliska czy wąsko z daleka</h2>
+    <p class="why">Liczby na pierścieniu zoomu (24, 35, 50, 70, 105) to <b>ogniskowa</b> w milimetrach. 24 mm pokazuje szeroko, 105 mm przybliża jak lornetka.</p>
+    <div class="sim" id="sim-fl">
+      <div class="view"><canvas width="640" height="400" role="img" aria-label="Symulowany portret przy różnych ogniskowych"></canvas></div>
+      <div class="seg" role="group" aria-label="Wersja obiektywu"><span class="lbl">Mój obiektyw:</span><button type="button" data-lens="L" aria-pressed="true">F4 L</button><button type="button" data-lens="STM" aria-pressed="false">F4-7.1 STM</button></div>
+      <div class="camhost"></div>
+      <div class="ctls"></div>
+      <div class="simlog" aria-live="polite"></div>
+      <div class="btns"><button class="btn reset">↺ Od nowa</button></div>
+    </div>
+    <p class="hint">Spróbuj: porównaj 24 mm i 105 mm. Patrz na góry w tle i na nos.</p>
+    <div class="box ok goal" hidden><span class="ic">✓</span><div>Twarz ma tę samą wielkość, bo przy 105 mm stoisz dalej. Zmienia się tło i proporcje twarzy. To jest <b>perspektywa</b>: zależy od tego, gdzie stoisz.</div></div>
+    <p>Z daleka tło wydaje się większe i bliżej osoby („ściśnięte”). Z bliska różnice odległości rosną: nos wychodzi duży, tło ucieka w dal.</p>
+    <div class="box tip"><span class="ic">i</span><div><b>Do portretów:</b> 70–105 mm i krok w tył. Twarz wygląda naturalnie, a tło jest bardziej rozmyte. <b>Do wnętrz i budynków:</b> 24 mm, ale nie podchodź nim blisko do twarzy. W wersji STM przy 105 mm wpada mniej światła (f/7.1 zamiast f/4).</div></div>
+  </section>
+
+  <!-- 8 -->
+  <section class="card" data-title="Drżenie rąk" hidden>
+    <span class="num">KROK 8</span>
+    <h2>Drżące ręce też robią smugę</h2>
+    <p class="why">Poświeć laserem na kropkę po drugiej stronie pokoju: kropka tańczy, choć ręka prawie stoi. <b>Im większy zoom</b>, tym bardziej widać każde drgnięcie.</p>
+    <p>Zasada: najdłuższy bezpieczny czas z ręki to około <span class="hl">1 / ogniskowa</span>. Przy 24 mm to ok. 1/30 s, przy 105 mm ok. 1/125 s.</p>
+    <div class="sim" id="sim-hh">
+      <div class="view"><canvas width="640" height="400" role="img" aria-label="Symulowane zdjęcie z drżeniem rąk"></canvas></div>
+      <label class="sw"><input type="checkbox" id="hh-is"> Stabilizacja IS w obiektywie</label>
+      <div class="camhost"></div>
+      <div class="ctls"></div>
+      <div class="simlog" aria-live="polite"></div>
+      <div class="btns"><button class="btn reset">↺ Od nowa</button></div>
+    </div>
+    <p class="hint">Spróbuj: ustaw 105 mm, włącz IS i znajdź najdłuższy czas, przy którym zdjęcie jest jeszcze ostre.</p>
+    <div class="box ok goal" hidden><span class="ic">✓</span><div>1/15 s przy 105 mm, z ręki! Bez IS byłoby to ok. 1/125 s. Stabilizacja daje zapas kilku stopni.</div></div>
+    <div class="box warn"><span class="ic">!</span><div>IS uspokaja <b>Twoje ręce</b>, ale nie zamrozi biegnącego psa. Na ruch pomaga tylko krótszy czas.</div></div>
+    <div class="box tip"><span class="ic">i</span><div>EOS R nie ma stabilizacji w korpusie, ale RF 24-105 ma ją w obiektywie (IS). Matryca jest pełnoklatkowa, więc reguła działa wprost. W aparatach z mniejszą matrycą APS-C mnoży się ogniskową ×1,6.</div></div>
+  </section>
+
+  <!-- 9 -->
+  <section class="card ex" data-title="Ćwiczenie: ruch i zoom" data-ex hidden>
+    <span class="num">KROK 9 · <b>ĆWICZENIE Z APARATEM</b></span>
+    <h2>Zamroź, rozmaż, przybliż</h2>
+    <p class="why">Trzy mini-testy: <b>ruch</b>, ręce i perspektywa. Około 10 minut.</p>
+    <ul class="check" data-chk="c2">
+      <li><label><input type="checkbox"><span><span class="n">1</span>Włącz tryb <code>Tv</code> (MODE → pokrętło → <code>Tv</code>). Teraz pokrętło przy spuście zmienia czas, a aparat sam dobiera przesłonę.</span></label></li>
+      <li><label><input type="checkbox"><span><span class="n">2</span>Odkręć kran (albo poproś kogoś, żeby machał ręką). Zrób zdjęcie przy <b>1/1000</b>, potem <b>1/60</b>, potem <b>1/8</b>. Aparat oprzyj o coś.</span></label></li>
+      <li><label><input type="checkbox"><span><span class="n">3</span>Liczba f miga przy 1/1000? Za mało światła. Podejdź do okna albo ustaw ISO na AUTO.</span></label></li>
+      <li><label><input type="checkbox"><span><span class="n">4</span>Test rąk: zoom na <b>105 mm</b>, czas <b>1/15</b>, trzy zdjęcia czegoś nieruchomego z ręki. Potem to samo przy <b>1/125</b>.</span></label></li>
+      <li><label><input type="checkbox"><span><span class="n">5</span>Test perspektywy: portret kogoś przy <b>24 mm z bliska</b>, potem przy <b>105 mm z daleka</b>, tak żeby twarz była podobnej wielkości.</span></label></li>
+      <li><label><input type="checkbox"><span><span class="n">6</span>Powiększ zdjęcia na ekranie (rozsuń dwa palce) i porównaj.</span></label></li>
+    </ul>
+    <p class="lbl">Czego się spodziewać w teście perspektywy</p>
+    <div class="ba">
+      <figure><canvas id="ba-24" width="640" height="400" role="img" aria-label="Przykład: 24 mm z bliska"></canvas><figcaption><b>24 mm</b> · z bliska</figcaption></figure>
+      <figure><canvas id="ba-105" width="640" height="400" role="img" aria-label="Przykład: 105 mm z daleka"></canvas><figcaption><b>105 mm</b> · z daleka</figcaption></figure>
+    </div>
+    <div class="box ok"><span class="ic">✓</span><div>Woda jak szkło przy 1/1000 i jak mgiełka przy 1/8? Panujesz nad czasem.</div></div>
+  </section>
+
+  <!-- 10 -->
+  <section class="card" data-title="ISO" hidden>
+    <span class="num">KROK 10</span>
+    <h2>ISO to podgłośnienie</h2>
+    <p class="why">Słuchasz cichej piosenki i podkręcasz głośność. Słychać lepiej, ale też szum. <b>ISO</b> robi to samo ze światłem: rozjaśnia, ale dokłada ziarno.</p>
+    <p>Skala: ISO 100, 200, 400, 800, 1600, 3200, 6400… Każdy krok w górę to <span class="hl">2× jaśniej</span>.</p>
+    <div class="sim" id="sim-iso">
+      <div class="view"><canvas width="640" height="400" role="img" aria-label="Symulowane zdjęcie w ciemnym miejscu z lupą"></canvas><span class="tag">ciemny pokój · f/4 · 1/60 s</span></div>
+      <div class="camhost"></div>
+      <div class="ctls"></div>
+      <div class="simlog" aria-live="polite"></div>
+      <div class="btns"><button class="btn reset">↺ Od nowa</button></div>
+    </div>
+    <p class="hint">Spróbuj: znajdź ISO, przy którym wskaźnik stoi na 0. Popatrz w lupę w rogu.</p>
+    <div class="box ok goal" hidden><span class="ic">✓</span><div>ISO 3200: jasno, ale w lupie widać ziarno. Taka jest cena.</div></div>
+    <div class="cheat">
+      <div><b>ISO 100–400</b><span>czysty obraz, dobre światło</span></div>
+      <div><b>ISO 800–3200</b><span>w pełnej klatce (Twój EOS R) zwykle dobrze</span></div>
+      <div><b>ISO 6400+</b><span>szum wyraźny, gdy naprawdę musisz</span></div>
+    </div>
+    <div class="box tip"><span class="ic">i</span><div>ISO to <b>ostatnia deska ratunku</b>: najpierw dodaj światła przesłoną i czasem. Ale jasne zdjęcie przy ISO 3200 i tak wygląda lepiej niż ciemne przy ISO 800 rozjaśniane potem w telefonie.</div></div>
+  </section>
+
+  <!-- 11 -->
+  <section class="card" data-title="Stopnie" hidden>
+    <span class="num">KROK 11</span>
+    <h2>Stopień: wspólna waluta światła</h2>
+    <p class="why">Przesłona, czas i ISO mówią różnymi językami, ale płacą tą samą walutą: <b>stopniem</b>. +1 stopień = 2× więcej światła, −1 stopień = 2× mniej.</p>
+    <div class="ladder" aria-label="Kolejne pełne stopnie dla czasu, przesłony i ISO">
+      <div class="dir"><span>← mniej światła</span><span>więcej światła →</span></div>
+      <div class="row"><span class="rn">Czas</span><div class="cells"><span>1/1000</span><span>1/500</span><span>1/250</span><span>1/125</span><span>1/60</span><span>1/30</span><span>1/15</span></div></div>
+      <div class="row"><span class="rn">Przesłona</span><div class="cells"><span>f/16</span><span>f/11</span><span>f/8</span><span>f/5.6</span><span>f/4</span><span>f/2.8</span><span>f/2</span></div></div>
+      <div class="row"><span class="rn">ISO</span><div class="cells"><span>100</span><span>200</span><span>400</span><span>800</span><span>1600</span><span>3200</span><span>6400</span></div></div>
+    </div>
+    <div class="sim" id="sim-stop">
+      <div class="camhost"></div>
+      <div class="ctls"></div>
+      <div class="ledger" aria-hidden="true"></div>
+      <div class="simlog" aria-live="polite"></div>
+      <div class="btns"><button class="btn reset">↺ Od nowa</button></div>
+    </div>
+    <p class="hint">Spróbuj: przymknij do f/5.6 (−2 stopnie) i odzyskaj jasność czasem albo ISO.</p>
+    <div class="box ok goal" hidden><span class="ic">✓</span><div>Zabrałaś 2 stopnie w jednym miejscu i oddałaś 2 w drugim. To jest cały sekret trójkąta ekspozycji.</div></div>
+    <div class="box tip"><span class="ic">i</span><div>Twój Canon przeskakuje co <b>⅓ stopnia</b>: f/4 → 4.5 → 5 → 5.6, czas 1/125 → 1/100 → 1/80 → 1/60, ISO 100 → 125 → 160 → 200. <span class="hl">Trzy kliknięcia = 1 stopień.</span></div></div>
+  </section>
+
+  <!-- 12 -->
+  <section class="card" data-title="Trójkąt" hidden>
+    <span class="num">KROK 12</span>
+    <h2>Trójkąt: wszystkie pokrętła naraz</h2>
+    <p class="why">Każda zmiana to <b>wymiana</b>: dodajesz światło w jednym miejscu, zabierasz w drugim, a przy okazji wybierasz, jaką cenę płacisz.</p>
+    <div class="sim" id="sim-tri">
+      <div class="view"><canvas width="640" height="400" role="img" aria-label="Symulowane zdjęcie z psem i osobą"></canvas></div>
+      <div class="seg" role="group" aria-label="Światło w scenie"><span class="lbl">Światło:</span></div>
+      <div class="camhost"></div>
+      <div class="ctls"></div>
+      <div class="simlog" aria-live="polite"></div>
+      <ul class="tasks"></ul>
+      <div class="btns"><button class="btn reset">↺ Od nowa</button></div>
+    </div>
+    <div class="box ok goal" hidden><span class="ic">✓</span><div>Wszystkie trzy zadania zrobione. Umiesz już świadomie wymieniać stopnie!</div></div>
+    <div class="cheat">
+      <div><b>Rozmyte tło</b><span>mniejsza liczba f → za to krótszy czas albo niższe ISO</span></div>
+      <div><b>Zamrożony ruch</b><span>krótszy czas → za to większy otwór albo wyższe ISO</span></div>
+      <div><b>Mniej szumu</b><span>niższe ISO → za to większy otwór albo dłuższy czas</span></div>
+    </div>
+  </section>
+
+  <!-- 13 -->
+  <section class="card ex" data-title="Ćwiczenie: tryb M" data-ex hidden>
+    <span class="num">KROK 13 · <b>ĆWICZENIE Z APARATEM</b></span>
+    <h2>Tryb M i wymiana stopni na żywo</h2>
+    <p class="why">W trybie <code>M</code> aparat nic nie zmienia sam, tylko <b>podpowiada wskaźnikiem</b>. Idealne do sprawdzenia, czy stopnie naprawdę działają.</p>
+    <ul class="check" data-chk="c3">
+      <li><label><input type="checkbox"><span><span class="n">1</span>Wybierz pokój z lampą, wieczorem albo z zasłoniętym oknem.</span></label></li>
+      <li><label><input type="checkbox"><span><span class="n">2</span>Włącz tryb <code>M</code>. Pokrętło przy spuście zmienia czas, tylne pokrętło przesłonę.</span></label></li>
+      <li><label><input type="checkbox"><span><span class="n">3</span>Ustaw ISO ręcznie (dotknij wartości ISO na ekranie), np. na 400. Nie AUTO.</span></label></li>
+      <li><label><input type="checkbox"><span><span class="n">4</span>Ustaw <b>f/4</b> i <b>1/60</b>. Zmieniaj ISO, aż znacznik na skali stanie na 0. Zrób zdjęcie.</span></label></li>
+      <li><label><input type="checkbox"><span><span class="n">5</span>Ustaw <b>1/250</b> (−2 stopnie, czyli 6 kliknięć). Znacznik ucieknie w lewo. Podnieś ISO o 2 stopnie (×4), aż wróci na 0. Zrób zdjęcie.</span></label></li>
+      <li><label><input type="checkbox"><span><span class="n">6</span>Porównaj oba w powiększeniu. Jasność ta sama, drugie bardziej ziarniste.</span></label></li>
+    </ul>
+    <div class="box tip"><span class="ic">i</span><div>Znacznik po lewej (−) = za ciemno, po prawej (+) = za jasno. W M to Twój jedyny przewodnik.</div></div>
+    <div class="box ok"><span class="ic">✓</span><div>Udało się wrócić na 0 po zmianie czasu? Wymieniasz stopnie jak zawodowiec.</div></div>
+  </section>
+
+  <!-- 14 -->
+  <section class="card" data-title="Tryby" hidden>
+    <span class="num">KROK 14</span>
+    <h2>Tryby: kto kręci którym pokrętłem</h2>
+    <p class="why">Nie musisz kręcić wszystkimi trzema naraz. W trybach <b>Av</b> i <b>Tv</b> wybierasz jedno, a aparat dobiera resztę.</p>
+    <div class="cheat">
+      <div><b>A+ (Auto)</b><span>aparat robi wszystko; na pierwsze dni</span></div>
+      <div><b>Av</b><span>Ty: przesłona · aparat: czas. <em>Portret, pejzaż, nauka.</em></span></div>
+      <div><b>Tv</b><span>Ty: czas · aparat: przesłona. <em>Ruch, sport, zwierzęta.</em></span></div>
+      <div><b>M</b><span>Ty: wszystko. Statyw, stała scena.</span></div>
+    </div>
+    <div class="sim" id="sim-mode">
+      <div class="view"><canvas width="640" height="400" role="img" aria-label="Symulowane zdjęcie w wybranym trybie"></canvas></div>
+      <div class="seg" role="group" aria-label="Tryb" data-g="mode"><span class="lbl">Tryb:</span><button type="button" data-v="Av" aria-pressed="true">Av</button><button type="button" data-v="Tv" aria-pressed="false">Tv</button><button type="button" data-v="M" aria-pressed="false">M</button></div>
+      <div class="seg" role="group" aria-label="Światło w scenie" data-g="light"><span class="lbl">Światło:</span></div>
+      <label class="sw"><input type="checkbox" id="mode-aiso"> Auto ISO</label>
+      <div class="camhost"></div>
+      <div class="ctls"></div>
+      <div class="simlog" aria-live="polite"></div>
+      <div class="btns"><button class="btn reset">↺ Od nowa</button></div>
+    </div>
+    <p class="hint">Spróbuj: tryb Tv, światło „Wnętrze”, czas 1/1000. Aparatowi brakuje światła? Włącz Auto ISO.</p>
+    <div class="box ok goal" hidden><span class="ic">✓</span><div>Z Auto ISO aparat sam podkręcił ISO, żeby zdjęcie było jasne. To najwygodniejszy start: <b>Av + Auto ISO</b>.</div></div>
+    <div class="box tip"><span class="ic">i</span><div>EOS R nie ma klasycznego pokrętła trybów: naciśnij <b>MODE</b> i obróć pokrętło. Na liście jest też <code>P</code> (aparat dobiera przesłonę i czas) i <code>Fv</code>, na razie je pomiń. U Nikona i Sony tryby nazywają się <code>A</code> (= Av) i <code>S</code> (= Tv).</div></div>
+  </section>
+
+  <!-- 15 -->
+  <section class="card" data-title="Kompensacja" hidden>
+    <span class="num">KROK 15</span>
+    <h2>Kompensacja: „aparacie, jaśniej proszę”</h2>
+    <p class="why">Aparat zakłada, że każda scena jest średnio szara. Śnieg robi więc szarym, a czarnego kota rozjaśnia. <b>Kompensacja ekspozycji</b> to Twoja poprawka: plus = jaśniej, minus = ciemniej.</p>
+    <div class="sim" id="sim-comp">
+      <div class="view"><canvas width="640" height="400" role="img" aria-label="Symulowane zdjęcie śniegu albo czarnego kota"></canvas></div>
+      <div class="seg" role="group" aria-label="Scena"><span class="lbl">Scena:</span><button type="button" data-v="snow" aria-pressed="true">Śnieg</button><button type="button" data-v="cat" aria-pressed="false">Czarny kot</button></div>
+      <div class="camhost"></div>
+      <div class="ctls"></div>
+      <div class="simlog" aria-live="polite"></div>
+      <div class="btns"><button class="btn reset">↺ Od nowa</button></div>
+    </div>
+    <p class="hint">Spróbuj: zrób śnieg biały, a potem kota czarnego.</p>
+    <div class="box ok goal" hidden><span class="ic">✓</span><div>Jasna scena = kompensacja na plus. Ciemna scena = na minus. Brzmi odwrotnie, a działa.</div></div>
+    <p>Działa w Av, Tv i P (a w M z Auto ISO). Nie ruszasz przesłony ani czasu: kręcisz kompensacją, aparat przelicza resztę.</p>
+    <div class="box warn"><span class="ic">!</span><div>Na EOS R w trybie Av kompensację zwykle zmienia <b>tylne pokrętło</b>. Ustawienie <span class="hl">nie wraca samo do 0</span>, także po wyłączeniu aparatu. Po zdjęciu ustaw z powrotem 0.</div></div>
+  </section>
+
+  <!-- 16 -->
+  <section class="card ex" data-title="Ćwiczenie: zestaw" data-ex hidden>
+    <span class="num">KROK 16 · <b>ĆWICZENIE Z APARATEM</b></span>
+    <h2>Twój codzienny zestaw</h2>
+    <p class="why">Av + Auto ISO + kompensacja. Tym zestawem zrobisz <b>większość zdjęć</b>.</p>
+    <ul class="check" data-chk="c4">
+      <li><label><input type="checkbox"><span><span class="n">1</span>Włącz Auto ISO: w menu fotografowania (czerwone zakładki) znajdź <i>Ustawienia czułości ISO</i> → <i>Czułość ISO</i> → <code>AUTO</code>.</span></label></li>
+      <li><label><input type="checkbox"><span><span class="n">2</span>W tym samym miejscu ustaw zakres auto od 100 do 12800 (albo 6400, jeśli wolisz mniej szumu).</span></label></li>
+      <li><label><input type="checkbox"><span><span class="n">3</span>Tryb <code>Av</code>, przesłona f/4 albo f/5.6.</span></label></li>
+      <li><label><input type="checkbox"><span><span class="n">4</span>Sfotografuj coś jasnego: białą ścianę, kartkę, niebo. Wyszło szare? Kompensacja <b>+1</b> i jeszcze raz.</span></label></li>
+      <li><label><input type="checkbox"><span><span class="n">5</span>Sfotografuj coś ciemnego na ciemnym tle. Za jasne? Kompensacja <b>−1</b>.</span></label></li>
+      <li><label><input type="checkbox"><span><span class="n">6</span>Ustaw kompensację z powrotem na <b>0</b>.</span></label></li>
+    </ul>
+    <div class="box tip"><span class="ic">i</span><div>Nazwy w menu mogą się trochę różnić w zależności od wersji oprogramowania. Szukaj słowa ISO albo skali z plusem i minusem.</div></div>
+    <div class="box ok"><span class="ic">✓</span><div>Gotowe? Od teraz możesz zostawić AUTO na pokrętle w spokoju.</div></div>
+  </section>
+
+  <!-- 17 -->
+  <section class="card" data-title="Diagnoza" hidden>
+    <span class="num">KROK 17</span>
+    <h2>Co poszło nie tak? Diagnoza w 10 sekund</h2>
+    <p class="why">Złe zdjęcie zwykle ma jedną przyczynę. Zmieniaj <b>jedną rzecz na raz</b> i rób zdjęcie testowe.</p>
+    <div class="sim" id="sim-quiz">
+      <div class="quizq">
+        <div class="view"><canvas width="640" height="400" role="img" aria-label="Zdjęcie z błędem do rozpoznania"></canvas><span class="tag" id="quiz-n">1 / 5</span></div>
+        <p><b>Co tu poszło nie tak?</b></p>
+        <div class="quizopts"></div>
+      </div>
+      <div class="simlog" aria-live="polite">Wybierz odpowiedź.</div>
+      <div class="btns"><button class="btn primary" id="quiz-next" disabled>Następne zdjęcie →</button><button class="btn reset">↺ Od nowa</button></div>
+    </div>
+    <div class="box ok goal" hidden><span class="ic">✓</span><div id="quiz-score">Komplet!</div></div>
+    <div class="faq">
+      <details><summary>Zdjęcie jest za ciemne</summary><p>Za mało światła. Kompensacja na plus. Albo mniejsza liczba f, dłuższy czas, wyższe ISO.</p></details>
+      <details><summary>Za jasne, białe plamy</summary><p>Za dużo światła. Kompensacja na minus. Albo większa liczba f, krótszy czas.</p></details>
+      <details><summary>Rozmazane (smuga)</summary><p>Czas za długi. Rozmyty tylko ruchomy obiekt? Tv i 1/500. Rozmyte całe zdjęcie? Drżały ręce: czas krótszy niż 1/ogniskowa albo oprzyj aparat.</p></details>
+      <details><summary>Ziarniste</summary><p>ISO za wysokie. Obniż ISO, otwórz przesłonę, podejdź do światła.</p></details>
+      <details><summary>Część twarzy nieostra</summary><p>Za płytka głębia ostrości przy f/4 i 105 mm z bliska. Przymknij do f/5.6–f/8 i ustaw ostrość na oku.</p></details>
+      <details><summary>Wszystko nieostre</summary><p>Zła ostrość albo ruch. Sprawdź, gdzie była ramka ostrości, i skróć czas.</p></details>
+    </div>
+  </section>
+
+  <!-- 18 -->
+  <section class="card" data-title="Ściąga" hidden>
+    <span class="num">KROK 18</span>
+    <h2>Ściąga na spacer</h2>
+    <p class="why">Nie wiesz, od czego zacząć? <b>Av, f/4, Auto ISO</b> i patrz na wynik. Jedno zdjęcie testowe powie Ci więcej niż każdy poradnik.</p>
+    <div class="cheat">
+      <div><b>Av · f/4 · 70–105 mm</b><span>portret z rozmytym tłem, krok w tył, Auto ISO</span></div>
+      <div><b>Av · f/8–f/11 · ISO 100</b><span>pejzaż, ostrość wszędzie, 24–35 mm</span></div>
+      <div><b>Av · f/5.6–f/8</b><span>produkt, ubranie na stole, ISO 100–400</span></div>
+      <div><b>Tv · 1/500 · Auto ISO</b><span>dzieci, zwierzęta</span></div>
+      <div><b>Tv · 1/1000+ · Auto ISO</b><span>sport, ptaki, 105 mm</span></div>
+      <div><b>Av · f/4 · Auto ISO</b><span>wnętrze, mało światła, ISO do 12800</span></div>
+      <div><b>Tv · 1/4 s i dłużej</b><span>woda, światła aut jako smuga; statyw, ISO 100, najlepiej o zmierzchu</span></div>
+      <div><b>Kompensacja ±</b><span>za ciemno: plus; za jasno: minus; potem wróć do 0</span></div>
+      <div><b>1 / ogniskowa</b><span>najdłuższy czas z ręki (105 mm → 1/125)</span></div>
+      <div><b>mała liczba f</b><span>= duży otwór = jaśniej i rozmyte tło</span></div>
+    </div>
+    <p class="lbl">Zadania na spacer</p>
+    <ul class="check" data-chk="c5">
+      <li><label><input type="checkbox"><span>Portret przy 105 mm i f/4, z tłem daleko za osobą.</span></label></li>
+      <li><label><input type="checkbox"><span>Pejzaż przy 24 mm i f/11.</span></label></li>
+      <li><label><input type="checkbox"><span>Coś w ruchu przy 1/1000: rower, pies, ptak.</span></label></li>
+      <li><label><input type="checkbox"><span>Płynąca woda przy 1/15 s, aparat oparty o ławkę.</span></label></li>
+      <li><label><input type="checkbox"><span>Zdjęcie po zmroku z Auto ISO. Sprawdź, jakie ISO wybrał aparat.</span></label></li>
+      <li><label><input type="checkbox"><span>Jasna scena (niebo, śnieg, plaża) z kompensacją +1.</span></label></li>
+    </ul>
+    <div class="box ok"><span class="ic">✓</span><div><b>To już umiesz:</b> wybrać tryb, przesłonę i czas do sytuacji, wiesz, ile kosztuje wysokie ISO, i potrafisz poprawić jasność kompensacją. Już nie fotografujesz w AUTO. Wiesz, <b>dlaczego</b> ustawiasz to, co ustawiasz.</div></div>
+  </section>
+
+  </main>
+
+  <div class="nav">
+    <button class="btn" id="prev">← Wstecz</button>
+    <button class="btn donebtn" id="done">Oznacz jako zrobione</button>
+    <button class="btn primary" id="next">Dalej →</button>
+  </div>
+  <p class="kbd">Strzałki ← → na klawiaturze też działają</p>
+  <div class="foot"><span>Postęp zapisuje się w tej przeglądarce.</span><button class="linkbtn" id="wipe">Wyczyść postęp</button></div>
+</div>
+
+<script>
+(function(){
+'use strict';
+/* ---------- skale (pełne stopnie) ---------- */
+const AP=['1.4','2','2.8','4','5.6','8','11','16','22'];          // a = 0..8, N = 2^((a+1)/2)
+const TMR=['4000','2000','1000','500','250','125','60','30','15','8','4','2','1"','2"','4"'];
+const TM=['1/4000','1/2000','1/1000','1/500','1/250','1/125','1/60','1/30','1/15','1/8','1/4','1/2','1"','2"','4"']; // j = 0..14, t = 2^(j-12)
+const ISO=[100,200,400,800,1600,3200,6400,12800];                  // i = 0..7
+const Nof=a=>Math.pow(2,(a+1)/2), Tof=j=>Math.pow(2,j-12);
+// przesunięcie ekspozycji w stopniach: S = jasność sceny (EV przy ISO 100)
+const offset=(S,a,j,i)=>S+i-(a+1)-(12-j);
+const LIGHTS=[{n:'Słońce',S:15},{n:'Pochmurno',S:12},{n:'Zmierzch',S:8,tint:[1,.94,.86]},{n:'Wnętrze',S:5,tint:[1,.87,.68]}];
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const reduce=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function plStop(n){n=Math.abs(n);if(n===1)return'stopień';const d=n%10,h=n%100;return(d>=2&&d<=4&&!(h>=12&&h<=14))?'stopnie':'stopni';}
+function fmtStops(d){if(d===0)return'0 stopni';return(d>0?'+':'−')+Math.abs(d)+' '+plStop(d);}
+function fmtThird(v){ // v w stopniach, wielokrotność 1/3
+  const n=Math.round(v*3); if(n===0)return'0';
+  const s=n>0?'+':'−', w=Math.floor(Math.abs(n)/3), r=Math.abs(n)%3;
+  return s+(w?w:'')+(r===1?'⅓':r===2?'⅔':'');
+}
+const TH=[[-13,'1/8000'],[-12.67,'1/6400'],[-12.33,'1/5000'],[-12,'1/4000'],[-11.67,'1/3200'],[-11.33,'1/2500'],[-11,'1/2000'],[-10.67,'1/1600'],[-10.33,'1/1250'],[-10,'1/1000'],[-9.67,'1/800'],[-9.33,'1/640'],[-9,'1/500'],[-8.67,'1/400'],[-8.33,'1/320'],[-8,'1/250'],[-7.67,'1/200'],[-7.33,'1/160'],[-7,'1/125'],[-6.67,'1/100'],[-6.33,'1/80'],[-6,'1/60'],[-5.67,'1/50'],[-5.33,'1/40'],[-5,'1/30'],[-4.67,'1/25'],[-4.33,'1/20'],[-4,'1/15'],[-3.67,'1/13'],[-3.33,'1/10'],[-3,'1/8'],[-2.67,'1/6'],[-2.33,'1/5'],[-2,'1/4'],[-1.67,'0"3'],[-1.33,'0"4'],[-1,'0"5'],[-.67,'0"6'],[-.33,'0"8'],[0,'1"']];
+function thirdTime(log2t){let b=TH[0];for(const t of TH)if(Math.abs(t[0]-log2t)<Math.abs(b[0]-log2t))b=t;return b[1];}
+
+/* ---------- silnik obrazu ---------- */
+const W=640,H=400,P=64;
+function mk(w,h){const c=document.createElement('canvas');c.width=w||W;c.height=h||H;return c;}
+const SCR={};
+function scratch(k,w,h){const id=k+w+'x'+h;return SCR[id]||(SCR[id]=mk(w,h));}
+const FILTER_OK=(()=>{try{const c=mk(4,4).getContext('2d');if(typeof c.filter!=='string')return false;c.filter='blur(1px)';return c.filter==='blur(1px)';}catch(e){return false;}})();
+function blurDraw(ctx,src,r){
+  if(r<0.35){ctx.drawImage(src,0,0);return;}
+  if(FILTER_OK){ctx.filter='blur('+r.toFixed(2)+'px)';ctx.drawImage(src,0,0);ctx.filter='none';return;}
+  const f=Math.max(1.4,r*.9),w=Math.max(2,Math.round(src.width/f)),h=Math.max(2,Math.round(src.height/f));
+  const t=scratch('bd',w,h),tc=t.getContext('2d');tc.clearRect(0,0,w,h);tc.imageSmoothingEnabled=true;tc.imageSmoothingQuality='high';tc.drawImage(src,0,0,w,h);
+  ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.drawImage(t,0,0,w,h,0,0,src.width,src.height);
+}
+// rozmycie ruchu: średnia z przesuniętych kopii (dodawanie z premultiplikacją = uczciwa średnia także dla przezroczystości)
+function smearAdd(ctx,src,dx,dy){
+  const len=Math.hypot(dx,dy);
+  if(len<0.7){ctx.drawImage(src,0,0);return;}
+  const n=Math.min(48,Math.max(2,Math.ceil(len/1.6)));
+  const t=scratch('sm',src.width,src.height),tc=t.getContext('2d');
+  tc.globalCompositeOperation='source-over';tc.globalAlpha=1;tc.clearRect(0,0,t.width,t.height);
+  tc.globalCompositeOperation='lighter';tc.globalAlpha=1/n;
+  for(let k=0;k<n;k++){const f=k/(n-1)-.5;tc.drawImage(src,dx*f,dy*f);}
+  tc.globalCompositeOperation='source-over';tc.globalAlpha=1;
+  ctx.drawImage(t,0,0);
+}
+function shakeSmear(ctx,cv,len){
+  const t=scratch('sk',W,H),tc=t.getContext('2d');tc.clearRect(0,0,W,H);tc.drawImage(cv,0,0);
+  const n=Math.min(40,Math.max(2,Math.ceil(len/1.4)));
+  for(let k=0;k<n;k++){const f=k/(n-1)-.5;ctx.globalAlpha=1/(k+1);ctx.drawImage(t,len*.82*f,len*.5*f+Math.sin(f*6)*len*.08);}
+  ctx.globalAlpha=1;
+}
+const S2L=new Float32Array(256);for(let v=0;v<256;v++)S2L[v]=Math.pow(v/255,2.2);
+const l2s=x=>255*Math.pow(clamp(x,0,1),1/2.2);
+const NW=W>>1,NH=H>>1,NLEN=NW*NH;
+const NOISE=(()=>{const a=new Float32Array(NLEN*2+4096);for(let k=0;k<a.length;k+=2){let u=Math.random()||1e-9,v=Math.random();const r=Math.sqrt(-2*Math.log(u));a[k]=r*Math.cos(6.2832*v);a[k+1]=r*Math.sin(6.2832*v);}return a;})();
+// "wywołanie": ekspozycja liczona w liniowym świetle (2^stopnie), szum ISO, lupa
+function develop(ctx,o){
+  const gain=o.gain==null?1:o.gain, iso=o.iso||100, tint=o.tint||[1,1,1];
+  const img=ctx.getImageData(0,0,W,H),d=img.data;
+  const L=[0,1,2].map(c=>{const u=new Uint8ClampedArray(256);for(let v=0;v<256;v++)u[v]=l2s(S2L[v]*gain*tint[c]);return u;});
+  const L0=L[0],L1=L[1],L2=L[2];
+  const amp=iso<=100?0:2.3*Math.sqrt(iso/100)-1.3;
+  const off=(Math.random()*4000)|0;
+  for(let y=0;y<H;y++){
+    const nrow=(y>>1)*NW;
+    for(let x=0;x<W;x++){
+      const i=(y*W+x)*4;let r=L0[d[i]],g=L1[d[i+1]],b=L2[d[i+2]];
+      if(amp>0){
+        const ni=(nrow+(x>>1))*2+off, w=1.3-.8*(r+g+b)/765, n=NOISE[ni]*amp*w, c=NOISE[ni+1]*amp*.5*w;
+        r+=n+c;g+=n;b+=n-c;
+      }
+      d[i]=r;d[i+1]=g;d[i+2]=b;
+    }
+  }
+  ctx.putImageData(img,0,0);
+  if(o.loupe){
+    const lp=o.loupe,sz=lp.s,z=3,dw=sz*z,dx=W-dw-12,dy=H-dw-12;
+    const t=scratch('lp',sz,sz),tc=t.getContext('2d');tc.clearRect(0,0,sz,sz);tc.drawImage(ctx.canvas,lp.x,lp.y,sz,sz,0,0,sz,sz);
+    ctx.imageSmoothingEnabled=false;ctx.drawImage(t,0,0,sz,sz,dx,dy,dw,dw);ctx.imageSmoothingEnabled=true;
+    ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.strokeRect(dx,dy,dw,dw);
+    ctx.lineWidth=2;ctx.strokeStyle='rgba(255,255,255,.8)';ctx.strokeRect(lp.x,lp.y,sz,sz);
+  }
+}
+
+/* ---------- rysowanie scen ---------- */
+function circ(x,cx,cy,r){x.beginPath();x.arc(cx,cy,r,0,Math.PI*2);x.fill();}
+function ell(x,cx,cy,rx,ry,rot){x.beginPath();x.ellipse(cx,cy,rx,ry,rot||0,0,Math.PI*2);x.fill();}
+function rnd(seed){let s=seed>>>0;return()=>{s=(s*1664525+1013904223)>>>0;return s/4294967296;};}
+function tree(x,cx,cy,r,col){
+  x.fillStyle='#5B4330';x.fillRect(cx-5,cy,10,70);
+  x.fillStyle=col;circ(x,cx,cy,r);circ(x,cx-r*.55,cy+r*.3,r*.7);circ(x,cx+r*.55,cy+r*.25,r*.75);
+  x.fillStyle='rgba(255,255,255,.12)';circ(x,cx-r*.25,cy-r*.35,r*.45);
+}
+function house(x,hx,hy,s){
+  s=s||1;x.fillStyle='#EFE3CC';x.fillRect(hx,hy,100*s,72*s);
+  x.fillStyle='#B9503A';x.beginPath();x.moveTo(hx-10*s,hy);x.lineTo(hx+50*s,hy-42*s);x.lineTo(hx+110*s,hy);x.fill();
+  x.fillStyle='#6E92B5';x.fillRect(hx+14*s,hy+16*s,22*s,20*s);x.fillRect(hx+64*s,hy+16*s,22*s,20*s);
+  x.fillStyle='#7A4B2E';x.fillRect(hx+42*s,hy+38*s,16*s,34*s);
+}
+function cloud(x,cx,cy,s){x.fillStyle='rgba(255,255,255,.85)';ell(x,cx,cy,40*s,14*s);ell(x,cx-22*s,cy+4*s,26*s,11*s);ell(x,cx+18*s,cy-8*s,24*s,14*s);}
+function drawPark(x){
+  const E=P;let g=x.createLinearGradient(0,-E,0,250);g.addColorStop(0,'#5FA3DC');g.addColorStop(.7,'#BFDDF2');g.addColorStop(1,'#E4F0F7');
+  x.fillStyle=g;x.fillRect(-E,-E,W+2*E,320+E);
+  cloud(x,110,50,1);cloud(x,520,36,1.3);
+  x.fillStyle='#9CBFAE';x.beginPath();x.moveTo(-E,240);x.bezierCurveTo(80,190,180,200,260,225);x.bezierCurveTo(340,195,460,180,560,215);x.bezierCurveTo(600,205,660,200,W+E,215);x.lineTo(W+E,300);x.lineTo(-E,300);x.fill();
+  house(x,420,175);
+  [[-30,205,52,'#356E43'],[35,186,58,'#417F4C'],[105,210,42,'#2F6340'],[300,200,50,'#3B7849'],[362,186,56,'#2E6A3D'],[585,190,58,'#3B7849'],[650,210,46,'#2F6340']].forEach(t=>tree(x,t[0],t[1],t[2],t[3]));
+  g=x.createLinearGradient(0,240,0,H+E);g.addColorStop(0,'#86B86F');g.addColorStop(1,'#4E8A43');x.fillStyle=g;x.fillRect(-E,248,W+2*E,H+E-248);
+  x.fillStyle='#D8C9A8';x.beginPath();x.moveTo(330,252);x.quadraticCurveTo(430,300,390,H+E);x.lineTo(580,H+E);x.quadraticCurveTo(480,300,362,252);x.fill();
+  const R=rnd(7);
+  for(let i=0;i<16;i++){const bx=-50+i*50,by=262+((i*37)%14);x.fillStyle=i%2?'#3F7A3E':'#4C8A47';circ(x,bx,by,26);
+    for(let k=0;k<5;k++){x.fillStyle=['#F4A6C0','#FFF4D6','#F7D35B','#E86A7A'][(i+k)%4];circ(x,bx-18+R()*36,by-14+R()*22,3.2);}}
+  // girlanda lampek: małe jasne punkty, które po rozmyciu robią się miękkimi kulkami
+  x.strokeStyle='rgba(60,50,40,.6)';x.lineWidth=1.5;x.beginPath();
+  const ly=xx=>72+40*(1-Math.pow((xx-W/2)/(W/2+E),2));
+  for(let xx=-E;xx<=W+E;xx+=8){xx===-E?x.moveTo(xx,ly(xx)):x.lineTo(xx,ly(xx));}x.stroke();
+  for(let xx=-E+10,k=0;xx<=W+E;xx+=30,k++){const yy=ly(xx)+6;
+    const gg=x.createRadialGradient(xx,yy,0,xx,yy,13);gg.addColorStop(0,'rgba(255,236,170,.95)');gg.addColorStop(1,'rgba(255,200,90,0)');x.fillStyle=gg;circ(x,xx,yy,13);
+    x.fillStyle=k%3===0?'#FFF6D8':k%3===1?'#FFD978':'#FFB86A';circ(x,xx,yy,4.5);}
+}
+function drawPerson(x,o){
+  const cx=o.cx,top=o.top,k=o.s;
+  x.fillStyle='#3A2820';ell(x,cx,top+66*k,44*k,68*k);
+  x.fillStyle=o.shirt;x.beginPath();x.moveTo(cx-98*k,H+30);x.bezierCurveTo(cx-100*k,top+150*k,cx-72*k,top+122*k,cx-28*k,top+116*k);x.lineTo(cx+28*k,top+116*k);x.bezierCurveTo(cx+72*k,top+122*k,cx+100*k,top+150*k,cx+98*k,H+30);x.closePath();x.fill();
+  x.fillStyle='rgba(0,0,0,.12)';x.beginPath();x.moveTo(cx-24*k,top+116*k);x.quadraticCurveTo(cx,top+142*k,cx+24*k,top+116*k);x.fill();
+  x.fillStyle='#E2B08F';x.fillRect(cx-13*k,top+84*k,26*k,36*k);
+  x.fillStyle='#F0C6A4';ell(x,cx,top+54*k,34*k,42*k);
+  x.fillStyle='#3A2820';x.beginPath();x.ellipse(cx,top+42*k,37*k,33*k,0,Math.PI,Math.PI*2);x.fill();ell(x,cx-9*k,top+30*k,30*k,14*k,-.25);
+  if(o.hat){x.fillStyle=o.hat;x.beginPath();x.ellipse(cx,top+30*k,40*k,30*k,0,Math.PI,Math.PI*2);x.fill();x.fillRect(cx-40*k,top+26*k,80*k,10*k);circ(x,cx,top-2*k,9*k);}
+  x.fillStyle='#2A1E18';circ(x,cx-12*k,top+56*k,3.3*k);circ(x,cx+12*k,top+56*k,3.3*k);
+  x.strokeStyle='#C99572';x.lineWidth=2*k;x.lineCap='round';x.beginPath();x.moveTo(cx+1*k,top+58*k);x.lineTo(cx-3*k,top+68*k);x.lineTo(cx+3*k,top+69*k);x.stroke();
+  x.strokeStyle='#B5605A';x.lineWidth=2.4*k;x.beginPath();x.arc(cx,top+72*k,8*k,.15*Math.PI,.85*Math.PI);x.stroke();
+  x.fillStyle='rgba(230,120,120,.25)';circ(x,cx-20*k,top+68*k,6*k);circ(x,cx+20*k,top+68*k,6*k);
+}
+function drawDog(x,cx,cy,s){
+  x.lineCap='round';const c='#9A5E2E',dk='#6E4020';
+  x.fillStyle='rgba(0,0,0,.18)';ell(x,cx,cy+44*s,58*s,7*s);
+  x.strokeStyle=c;x.lineWidth=7*s;x.beginPath();x.moveTo(cx-46*s,cy-6*s);x.quadraticCurveTo(cx-70*s,cy-28*s,cx-82*s,cy-36*s);x.stroke();
+  x.strokeStyle=dk;x.lineWidth=9*s;
+  [[-34,8,-64,34],[-24,10,-44,40],[30,8,62,26],[22,10,44,38]].forEach(l=>{x.beginPath();x.moveTo(cx+l[0]*s,cy+l[1]*s);x.lineTo(cx+l[2]*s,cy+l[3]*s);x.stroke();});
+  x.fillStyle=c;ell(x,cx,cy,52*s,21*s);
+  x.fillStyle='#B57A45';ell(x,cx+22*s,cy+8*s,22*s,10*s);
+  x.fillStyle=c;circ(x,cx+52*s,cy-20*s,18*s);
+  x.fillStyle='#B57A45';ell(x,cx+68*s,cy-14*s,13*s,9*s);
+  x.fillStyle='#1A1210';circ(x,cx+80*s,cy-16*s,3.6*s);circ(x,cx+56*s,cy-26*s,2.6*s);
+  x.fillStyle=dk;x.beginPath();x.moveTo(cx+42*s,cy-34*s);x.lineTo(cx+36*s,cy-10*s);x.lineTo(cx+52*s,cy-22*s);x.fill();
+  x.strokeStyle='#D2393B';x.lineWidth=4*s;x.beginPath();x.arc(cx+50*s,cy-18*s,17*s,.35*Math.PI,.9*Math.PI);x.stroke();
+}
+function drawSnow(x){
+  let g=x.createLinearGradient(0,0,0,235);g.addColorStop(0,'#AFC0D2');g.addColorStop(1,'#E3EAF1');x.fillStyle=g;x.fillRect(0,0,W,H);
+  x.fillStyle='#DCE4EE';x.beginPath();x.moveTo(0,225);x.bezierCurveTo(150,195,300,210,420,200);x.bezierCurveTo(520,192,600,205,W,200);x.lineTo(W,260);x.lineTo(0,260);x.fill();
+  const R=rnd(3);
+  for(let i=0;i<15;i++){const tx=i*46+R()*20-10,ty=232-R()*14,h=40+R()*30;
+    x.fillStyle='#2F4B40';for(let l=0;l<3;l++){x.beginPath();x.moveTo(tx,ty-h+l*h*.28);x.lineTo(tx-h*.32+l*2,ty-h*.45+l*h*.28);x.lineTo(tx+h*.32-l*2,ty-h*.45+l*h*.28);x.fill();}
+    x.fillStyle='#F4F7FA';x.beginPath();x.moveTo(tx,ty-h);x.lineTo(tx-6,ty-h+9);x.lineTo(tx+6,ty-h+9);x.fill();}
+  g=x.createLinearGradient(0,232,0,H);g.addColorStop(0,'#EEF2F7');g.addColorStop(1,'#F8FAFC');x.fillStyle=g;x.fillRect(0,232,W,H-232);
+  x.fillStyle='#DCE4EE';ell(x,150,330,120,14);ell(x,470,375,140,12);ell(x,560,300,60,8);
+  x.fillStyle='#FBFCFE';x.strokeStyle='#C9D4E2';x.lineWidth=2;
+  [[500,330,46],[500,264,34],[500,214,24]].forEach(c=>{x.beginPath();x.arc(c[0],c[1],c[2],0,Math.PI*2);x.fill();x.stroke();});
+  x.fillStyle='#222';circ(x,492,208,3);circ(x,508,208,3);circ(x,500,258,3);circ(x,500,272,3);
+  x.fillStyle='#E8862E';x.beginPath();x.moveTo(500,214);x.lineTo(524,218);x.lineTo(500,220);x.fill();
+  x.fillStyle='#C7373F';x.fillRect(478,232,44,8);
+  drawPerson(x,{cx:220,top:132,s:1.08,shirt:'#C73A3F',hat:'#2E5C8A'});
+}
+function drawCat(x){
+  x.fillStyle='#3A3A41';x.fillRect(0,0,W,H);
+  x.fillStyle='#35353C';for(let i=0;i<W;i+=40)x.fillRect(i,0,18,250);
+  const g=x.createRadialGradient(570,110,10,570,110,170);g.addColorStop(0,'rgba(255,214,150,.35)');g.addColorStop(1,'rgba(255,214,150,0)');x.fillStyle=g;x.fillRect(380,0,260,300);
+  x.fillStyle='#EED9A8';x.beginPath();x.moveTo(545,80);x.lineTo(595,80);x.lineTo(612,130);x.lineTo(528,130);x.fill();
+  x.fillStyle='#2B2B30';x.fillRect(566,130,8,120);
+  x.fillStyle='#46372F';x.fillRect(0,240,W,H-240);x.fillStyle='#51413A';x.fillRect(20,250,280,60);x.fillRect(330,250,290,60);
+  x.fillStyle='#3E302A';x.fillRect(0,320,W,80);
+  x.fillStyle='#131316';ell(x,300,286,96,46);circ(x,384,232,44);
+  x.beginPath();x.moveTo(352,210);x.lineTo(358,166);x.lineTo(384,196);x.fill();x.beginPath();x.moveTo(396,196);x.lineTo(420,166);x.lineTo(422,214);x.fill();
+  x.strokeStyle='#131316';x.lineWidth=16;x.lineCap='round';x.beginPath();x.moveTo(210,300);x.quadraticCurveTo(170,330,230,338);x.stroke();
+  x.strokeStyle='#26262C';x.lineWidth=2;x.beginPath();x.arc(384,232,44,-2.6,-.4);x.stroke();
+  x.fillStyle='#E2BE3A';ell(x,370,228,8,6);ell(x,400,228,8,6);x.fillStyle='#111';ell(x,370,228,2,5.5);ell(x,400,228,2,5.5);
+  x.strokeStyle='#55555C';x.lineWidth=1;[[-1,-3],[-1,3],[1,-3],[1,3]].forEach(w=>{x.beginPath();x.moveTo(385+w[0]*8,248);x.lineTo(385+w[0]*44,246+w[1]*4);x.stroke();});
+}
+let PARK=null;
+function park(){
+  if(PARK)return PARK;
+  const bg=mk(W+2*P,H+2*P),b=bg.getContext('2d');b.translate(P,P);drawPark(b);
+  const person=mk();drawPerson(person.getContext('2d'),{cx:200,top:118,s:1.15,shirt:'#2F7D8C'});
+  const dog=mk();drawDog(dog.getContext('2d'),470,318,1);
+  return PARK={bg,person,dog};
+}
+function ctxOf(cv){return cv._c||(cv._c=cv.getContext('2d',{willReadFrequently:true}));}
+function renderPark(cv,o){
+  const L=park(),x=ctxOf(cv);
+  x.globalAlpha=1;x.globalCompositeOperation='source-over';x.fillStyle='#000';x.fillRect(0,0,W,H);
+  const pb=scratch('pb',W+2*P,H+2*P),pc=pb.getContext('2d');pc.clearRect(0,0,pb.width,pb.height);blurDraw(pc,L.bg,o.bgBlur||0);
+  x.drawImage(pb,P,P,W,H,0,0,W,H);
+  if(o.dog){const d1=scratch('d1',W,H),c1=d1.getContext('2d');c1.clearRect(0,0,W,H);blurDraw(c1,L.dog,o.dogBlur||0);smearAdd(x,d1,o.motion||0,0);}
+  x.drawImage(L.person,0,0);
+  if(o.shake>0.5)shakeSmear(x,cv,o.shake);
+  develop(x,o);
+}
+const SCN={};
+function scene(name){
+  if(SCN[name])return SCN[name];
+  const c=mk(),x=c.getContext('2d');(name==='snow'?drawSnow:drawCat)(x);
+  const d=x.getImageData(0,0,W,H).data;let s=0,n=0;
+  for(let i=0;i<d.length;i+=4*7){s+=.2126*S2L[d[i]]+.7152*S2L[d[i+1]]+.0722*S2L[d[i+2]];n++;}
+  return SCN[name]={c,avg:s/n};
+}
+// perspektywa: osoba zawsze tej samej wielkości, fotograf odchodzi o f/24 m
+function renderPersp(cv,f,N){
+  const x=cv.getContext('2d'),s=f/24,cx=W/2,hY=215;
+  const mag=D=>(f/(s+D))/(24/(1+D));
+  const blurPx=D=>{const fm=f/1000;return Math.min(20,(fm*fm/(N*(s-fm)))*(D/(s+D))*1000*(W/36));};
+  let g=x.createLinearGradient(0,0,0,hY);g.addColorStop(0,'#6AA8DE');g.addColorStop(1,'#D9EAF6');x.fillStyle=g;x.fillRect(0,0,W,hY+1);
+  g=x.createLinearGradient(0,hY,0,H);g.addColorStop(0,'#90BE78');g.addColorStop(1,'#5C9650');x.fillStyle=g;x.fillRect(0,hY,W,H-hY);
+  const layers=[
+    {D:2000,draw:c=>{const pk=[[40,30],[120,44],[200,26],[285,40],[370,32],[455,48],[540,30],[620,40]];
+      pk.forEach(p=>{c.fillStyle='#7E95B0';c.beginPath();c.moveTo(p[0]-70,hY+2);c.lineTo(p[0],hY-p[1]);c.lineTo(p[0]+70,hY+2);c.fill();
+        c.fillStyle='#F2F5F9';c.beginPath();c.moveTo(p[0]-p[1]*.35,hY-p[1]*.65);c.lineTo(p[0],hY-p[1]);c.lineTo(p[0]+p[1]*.35,hY-p[1]*.65);c.fill();});}},
+    {D:40,draw:c=>{c.fillStyle='#86B36F';c.fillRect(-400,hY+4,1400,40);house(c,372,hY-14,.42);
+      [[120,14],[170,18],[230,12],[470,16],[525,20],[600,14],[40,16]].forEach(t=>tree(c,t[0],hY-t[1]+2,t[1],'#3B7849'));}},
+    {D:3,draw:c=>{for(let i=-6;i<20;i++){c.fillStyle=i%2?'#3F7A3E':'#4C8A47';circ(c,i*42,hY+52,26);}
+      c.fillStyle='#8A6A4A';c.fillRect(-400,hY+60,1400,8);for(let i=-10;i<30;i++)c.fillRect(i*36,hY+30,6,40);}}
+  ];
+  layers.forEach(L=>{
+    const lc=scratch('pl',W+2*P,H+2*P),lx=lc.getContext('2d');lx.clearRect(0,0,lc.width,lc.height);
+    lx.save();lx.translate(P,P);const m=mag(L.D);lx.translate(cx,hY);lx.scale(m,m);lx.translate(-cx,-hY);L.draw(lx);lx.restore();
+    const bc=scratch('pb2',W+2*P,H+2*P),bx=bc.getContext('2d');bx.clearRect(0,0,bc.width,bc.height);blurDraw(bx,lc,blurPx(L.D));
+    x.drawImage(bc,P,P,W,H,0,0,W,H);
+  });
+  // osoba
+  const k=clamp((s/(s-.1)-1)/(1/.9-1),0,1),hx=cx,hy=200,rx=60*(1-.06*k),ry=76*(1+.05*k);
+  x.fillStyle='#3A2820';ell(x,hx,hy+20,rx+10,ry+30);
+  x.fillStyle='#2F7D8C';x.beginPath();x.moveTo(hx-190,H+10);x.bezierCurveTo(hx-190,hy+150,hx-130,hy+110,hx-40,hy+100);x.lineTo(hx+40,hy+100);x.bezierCurveTo(hx+130,hy+110,hx+190,hy+150,hx+190,H+10);x.fill();
+  x.fillStyle='#E2B08F';x.fillRect(hx-24,hy+50,48,60);
+  const ew=4+12*(1-k);x.fillStyle='#E7B994';ell(x,hx-rx-ew*.4,hy+6,ew,16);ell(x,hx+rx+ew*.4,hy+6,ew,16);
+  x.fillStyle='#F0C6A4';ell(x,hx,hy,rx,ry);
+  x.fillStyle='#3A2820';x.beginPath();x.ellipse(hx,hy-18,rx+4,ry*.75,0,Math.PI,Math.PI*2);x.fill();ell(x,hx-14,hy-38,rx*.8,22,-.25);
+  x.fillStyle='#2A1E18';circ(x,hx-22*(1-.12*k),hy+4,5);circ(x,hx+22*(1-.12*k),hy+4,5);
+  const nf=1+.75*k;
+  x.fillStyle='#E4AE8A';x.beginPath();x.moveTo(hx,hy+2);x.quadraticCurveTo(hx-11*nf,hy+22*nf,hx-10*nf,hy+26*nf);x.quadraticCurveTo(hx,hy+30*nf,hx+10*nf,hy+26*nf);x.quadraticCurveTo(hx+11*nf,hy+22*nf,hx,hy+2);x.fill();
+  x.fillStyle='#C98F6E';circ(x,hx-4*nf,hy+25*nf,2.2*nf);circ(x,hx+4*nf,hy+25*nf,2.2*nf);
+  x.strokeStyle='#B5605A';x.lineWidth=3.5;x.lineCap='round';x.beginPath();x.arc(hx,hy+36+6*k,14,.15*Math.PI,.85*Math.PI);x.stroke();
+  return {dist:s,blurFar:blurPx(2000),magFar:mag(2000)};
+}
+
+/* ---------- komponenty interfejsu ---------- */
+function makeSlider(host,o){
+  const n=o.labels.length,w=document.createElement('div');w.className='ctl';
+  w.innerHTML=`<div class="ctlhead"><label for="${o.id}">${o.label}</label><output class="val" for="${o.id}"></output></div>`+
+    `<input type="range" id="${o.id}" min="0" max="${n-1}" step="1" value="${o.value}">`+
+    `<div class="ruler${o.dense?' dense':''}" aria-hidden="true">${(o.ruler||o.labels).map((l,k)=>`<span style="--p:${k/(n-1)}"${o.dim&&o.dim.includes(k)?' class="dim"':''}>${l}</span>`).join('')}</div>`+
+    (o.left?`<div class="rulerdir" aria-hidden="true"><span>← ${o.left}</span><span>${o.right} →</span></div>`:'');
+  host.appendChild(w);
+  const inp=w.querySelector('input'),out=w.querySelector('output'),spans=[...w.querySelectorAll('.ruler span')];
+  const fmt=o.fmt||(v=>o.labels[v]);
+  function upd(){const v=+inp.value,t=fmt(v);out.textContent=t;inp.setAttribute('aria-valuetext',t);spans.forEach((s,k)=>{s.classList.toggle('on',k===v);});}
+  inp.addEventListener('input',()=>{upd();o.onChange&&o.onChange(+inp.value);});
+  upd();
+  return{get:()=>+inp.value,set(v){inp.value=v;upd();},disable(b){inp.disabled=b;w.classList.toggle('auto',b);},el:w,input:inp};
+}
+function makeCam(host,meter){
+  const d=document.createElement('div');d.className='cam';
+  let ticks='';
+  if(meter!==false)for(let q=-9;q<=9;q++){const p=(q+9)/18*100,maj=q%3===0,v=q/3;ticks+=`<span class="mt${maj?'':' mi'}" style="left:${p}%">${maj?(v===0?'0':v===-3?'−3':v===3?'+3':Math.abs(v)):'·'}</span>`;}
+  d.innerHTML=`<div class="camrow"></div>`+(meter!==false?`<div class="meter">${ticks}<span class="mk">▲</span></div>`:'');
+  host.appendChild(d);
+  const row=d.querySelector('.camrow'),mk_=d.querySelector('.mk');
+  return{set(o){
+    row.innerHTML=(o.mode?`<span class="cmode">${o.mode}</span>`:'')+(o.vals||[]).map(v=>`<span class="cv${v[1]?' '+v[1]:''}">${v[0]}</span>`).join('');
+    if(mk_&&o.off!=null){const c=clamp(o.off,-3,3);mk_.style.left=((c+3)/6*100)+'%';mk_.classList.toggle('zero',Math.abs(o.off)<.17);mk_.classList.toggle('out',Math.abs(o.off)>3);mk_.textContent=o.off>3?'▶':o.off<-3?'◀':'▲';}
+    d.setAttribute('aria-label','Ekran aparatu: '+(o.mode||'')+' '+(o.vals||[]).map(v=>v[0]).join(', ')+(o.off!=null?', wskaźnik '+fmtThird(clamp(Math.round(o.off*3)/3,-3,3)):''));
+  }};
+}
+function frame(id){
+  const r=document.getElementById(id),sec=r.closest('section');
+  const cam=r.querySelector('.camhost');
+  return{root:r,sec,cv:r.querySelector('canvas'),ctls:r.querySelector('.ctls'),log:r.querySelector('.simlog'),reset:r.querySelector('.reset'),
+    camHost:cam,goalBox:sec.querySelector('.goal'),
+    say(h){this.log.innerHTML=h;},
+    goal(on){if(on&&this.goalBox&&this.goalBox.hidden){this.goalBox.hidden=false;}},
+    ungoal(){if(this.goalBox)this.goalBox.hidden=true;}};
+}
+function raf(fn){let p=false;return()=>{if(p)return;p=true;requestAnimationFrame(()=>{p=false;fn();});};}
+function segGroup(el,onPick){
+  const bs=[...el.querySelectorAll('button')];
+  bs.forEach(b=>b.addEventListener('click',()=>{bs.forEach(x=>x.setAttribute('aria-pressed',x===b?'true':'false'));onPick(b.dataset.v!=null?b.dataset.v:b.dataset.lens,b);}));
+  return{set(v){bs.forEach(x=>x.setAttribute('aria-pressed',(x.dataset.v||x.dataset.lens)==v?'true':'false'));}};
+}
+function lightSeg(el,onPick){
+  LIGHTS.forEach((L,k)=>{const b=document.createElement('button');b.type='button';b.dataset.v=k;b.textContent=L.n;b.setAttribute('aria-pressed','false');el.appendChild(b);});
+  return segGroup(el,v=>onPick(+v));
+}
+const apRuler={labels:AP.map(a=>'f/'+a),ruler:AP,dim:[0,1,2]};
+const INIT=new Map();
+function onShow(id,fn){const sec=document.getElementById(id).closest('section');if(!INIT.has(sec))INIT.set(sec,[]);INIT.get(sec).push(fn);}
+
+/* ---------- 1. ekspozycja ---------- */
+onShow('sim-exp',()=>{
+  const F=frame('sim-exp'),cam=makeCam(F.camHost),L=['−3','−2','−1','0','+1','+2','+3'];
+  const draw=raf(()=>{const off=sl.get()-3;renderPark(F.cv,{gain:Math.pow(2,off)});cam.set({vals:[['Ilość światła:'],[L[sl.get()],'hot']],off});});
+  const sl=makeSlider(F.ctls,{id:'exp-sl',label:'Ilość światła',labels:L,value:1,left:'ciemniej',right:'jaśniej',onChange:v=>{
+    const off=v-3;F.say(off<0?`Za mało światła: zdjęcie <b>niedoświetlone</b>, ciemne cienie zlewają się w czerń.`:off>0?`Za dużo światła: zdjęcie <b>prześwietlone</b>, niebo i jasne miejsca robią się białe.`:`<span class="g">W sam raz:</span> dobrze naświetlone zdjęcie.`);
+    if(off===0)F.goal(true);draw();}});
+  F.reset.onclick=()=>{sl.set(1);F.ungoal();F.say('Przesuń suwak. Teraz zdjęcie jest za ciemne.');draw();};
+  F.say('Przesuń suwak. Teraz zdjęcie jest za ciemne.');draw();
+});
+
+/* ---------- 2. statyczny ekran aparatu ---------- */
+onShow('cam-static',()=>{makeCam(document.getElementById('cam-static')).set({mode:'Av',vals:[['f/4','hot'],['1/125'],['ISO 400']],off:0});});
+
+/* ---------- 3. przesłona: jasność ---------- */
+onShow('sim-ap',()=>{
+  const F=frame('sim-ap'),cam=makeCam(F.camHost),blades=document.getElementById('blades');let prev=3;
+  function svg(a){const r=88*Math.SQRT2/Nof(a);let p='M10,100a90,90 0 1,0 180,0a90,90 0 1,0 -180,0Z';
+    for(let k=0;k<8;k++){const t=k/8*Math.PI*2+.2;p+=(k?'L':'M')+(100+r*Math.cos(t)).toFixed(1)+','+(100+r*Math.sin(t)).toFixed(1);}blades.setAttribute('d',p+'Z');}
+  const draw=raf(()=>{const a=sl.get(),off=offset(10,a,5,2);svg(a);renderPark(F.cv,{gain:Math.pow(2,off),bgBlur:clamp(22.6/Nof(a)*.8,0,18)});
+    cam.set({mode:'M',vals:[['f/'+AP[a],'hot'],['1/125'],['ISO 400']],off});});
+  const sl=makeSlider(F.ctls,Object.assign({id:'ap-sl',label:'Przesłona',value:3,left:'jaśniej, duży otwór',right:'ciemniej, mały otwór',onChange:a=>{
+    const d=prev-a,off=offset(10,a,5,2);
+    F.say((d>0?`Otworzyłaś przesłonę o ${Math.abs(d)} ${plStop(d)}: ${Math.pow(2,Math.abs(d))}× więcej światła.`:d<0?`Przymknęłaś przesłonę o ${Math.abs(d)} ${plStop(d)}: ${Math.pow(2,Math.abs(d))}× mniej światła.`:'')+` Wskaźnik: <b>${fmtThird(clamp(off,-9,9))}</b>.`);
+    prev=a;if(a===4)F.goal(true);draw();}},apRuler));
+  F.reset.onclick=()=>{sl.set(3);prev=3;F.ungoal();F.say('f/4, 1/125 s, ISO 400. Wskaźnik: <b>+1</b>, trochę za jasno.');draw();};
+  F.say('f/4, 1/125 s, ISO 400. Wskaźnik: <b>+1</b>, trochę za jasno.');draw();
+});
+
+/* ---------- 4. głębia ostrości (Av: aparat dobiera czas) ---------- */
+function dofBlur(a){return clamp(22.6/Nof(a),0,18);}
+onShow('sim-dof',()=>{
+  const F=frame('sim-dof'),cam=makeCam(F.camHost);let seenMin=false,seenMax=false;
+  const draw=raf(()=>{const a=sl.get(),j=a+1;renderPark(F.cv,{bgBlur:dofBlur(a)});cam.set({mode:'Av',vals:[['f/'+AP[a],'hot'],[TM[j],'auto'],['ISO 100']],off:0});});
+  const sl=makeSlider(F.ctls,Object.assign({id:'dof-sl',label:'Przesłona',value:3,left:'tło rozmyte',right:'wszystko ostre',onChange:a=>{
+    const j=a+1;F.say(`f/${AP[a]}: ${a<=2?'tło mocno rozmyte, ostra tylko osoba.':a<=4?'tło lekko rozmyte.':a<=6?'prawie wszystko ostre.':'ostre od przodu do tyłu.'} Aparat dobrał czas <b>${TM[j]}</b>, żeby jasność się nie zmieniła.`);
+    if(a<=1)seenMin=true;if(a>=7)seenMax=true;if(seenMin&&seenMax)F.goal(true);draw();}},apRuler));
+  F.reset.onclick=()=>{sl.set(3);seenMin=seenMax=false;F.ungoal();F.say('f/4: tło lekko rozmyte. Przesuń w lewo i w prawo.');draw();};
+  F.say('f/4: tło lekko rozmyte. Przesuń w lewo i w prawo.');draw();
+});
+onShow('ba-f4',()=>{renderPark(document.getElementById('ba-f4'),{bgBlur:dofBlur(3)*1.6});renderPark(document.getElementById('ba-f16'),{bgBlur:dofBlur(7)*1.6});});
+
+/* ---------- 6. czas naświetlania ---------- */
+onShow('sim-sh',()=>{
+  const F=frame('sim-sh'),cam=makeCam(F.camHost);let prev=5;
+  const draw=raf(()=>{const j=sl.get(),off=offset(10,4,j,2);renderPark(F.cv,{dog:true,motion:Math.min(420,2000*Tof(j)),bgBlur:2,dogBlur:.6,gain:Math.pow(2,off)});
+    cam.set({mode:'M',vals:[['f/5.6'],[TM[j],'hot'],['ISO 400']],off});});
+  const sl=makeSlider(F.ctls,{id:'sh-sl',label:'Czas naświetlania',labels:TM,ruler:TMR,value:5,dense:true,left:'krótko, ciemniej',right:'długo, jaśniej',onChange:j=>{
+    const d=j-prev,off=offset(10,4,j,2),m=2000*Tof(j);
+    F.say(`${TM[prev]} → ${TM[j]}: ${fmtStops(d)} światła. ${m<=4.5?'Pies zamrożony.':m<=12?'Lekka smuga za psem.':'Pies to już smuga.'} Wskaźnik: <b>${fmtThird(off)}</b>.`);
+    prev=j;if(j<=3)F.goal(true);draw();}});
+  F.reset.onclick=()=>{sl.set(5);prev=5;F.ungoal();F.say('1/125 s: jasność dobra, ale biegnący pies zostawia smugę.');draw();};
+  F.say('1/125 s: jasność dobra, ale biegnący pies zostawia smugę.');draw();
+});
+
+/* ---------- 7. ogniskowa i perspektywa ---------- */
+const FL=[24,35,50,70,105],STM_N={24:4,35:5,50:5.6,70:6.3,105:7.1},FOV={24:84,35:63,50:47,70:34,105:23};
+onShow('sim-fl',()=>{
+  const F=frame('sim-fl'),cam=makeCam(F.camHost,false);let lens='L',s24=false,s105=false;
+  const seg=segGroup(F.root.querySelector('.seg'),v=>{lens=v;upd();});
+  function upd(){const f=FL[sl.get()],N=lens==='L'?4:STM_N[f];const r=renderPersp(F.cv,f,N);
+    cam.set({mode:'Av',vals:[[f+' mm','hot'],['f/'+N,lens==='STM'&&f>24?'auto':''],['kąt '+FOV[f]+'°']]});
+    F.say(`${f} mm: stoisz ok. <b>${r.dist.toFixed(1).replace('.',',')} m</b> od osoby. Góry w tle są ${r.magFar.toFixed(1).replace('.',',')}× większe niż przy 24 mm${f===24?' (punkt odniesienia)':''}. ${lens==='STM'&&f>24?`Wersja STM: najmniej f/${N}.`:''}`);
+    if(f===24)s24=true;if(f===105)s105=true;if(s24&&s105)F.goal(true);}
+  const sl=makeSlider(F.ctls,{id:'fl-sl',label:'Ogniskowa (zoom)',labels:FL.map(f=>f+' mm'),ruler:FL,value:0,left:'szeroko',right:'przybliżenie',onChange:upd});
+  F.reset.onclick=()=>{sl.set(0);lens='L';seg.set('L');s24=s105=false;F.ungoal();upd();};
+  upd();
+});
+onShow('ba-24',()=>{renderPersp(document.getElementById('ba-24'),24,4);renderPersp(document.getElementById('ba-105'),105,4);});
+
+/* ---------- 8. drżenie rąk ---------- */
+onShow('sim-hh',()=>{
+  const F=frame('sim-hh'),cam=makeCam(F.camHost,false),isEl=document.getElementById('hh-is');
+  const shake=()=>1.5*FL[fs.get()]*Tof(ts.get())/(isEl.checked?8:1);
+  const safe=f=>{let j=0;for(let k=0;k<TM.length;k++)if(Tof(k)<=1/f)j=k;return j;};
+  const draw=raf(()=>{renderPark(F.cv,{shake:shake()});});
+  function upd(){const f=FL[fs.get()],j=ts.get(),sh=shake(),ok=sh<=1.6;
+    cam.set({mode:'Tv',vals:[[TM[j],'hot'],[f+' mm'],[isEl.checked?'IS ON':'IS OFF']]});
+    F.say(`${f} mm, ${TM[j]}${isEl.checked?', z IS':', bez IS'}: ${ok?'<span class="g">ostro</span>':sh<4?'lekko poruszone':'wyraźnie poruszone'}. Bezpieczny czas bez IS: ok. <b>${TM[safe(f)]}</b>.`);
+    if(f===105&&isEl.checked&&j===8&&ok)F.goal(true);draw();}
+  const fs=makeSlider(F.ctls,{id:'hh-f',label:'Ogniskowa',labels:FL.map(f=>f+' mm'),ruler:FL,value:4,left:'szeroko',right:'przybliżenie',onChange:upd});
+  const ts=makeSlider(F.ctls,{id:'hh-t',label:'Czas',labels:TM,ruler:TMR,value:7,dense:true,left:'krótko',right:'długo',onChange:upd});
+  isEl.addEventListener('change',upd);
+  F.reset.onclick=()=>{fs.set(4);ts.set(7);isEl.checked=false;F.ungoal();upd();};
+  upd();
+});
+
+/* ---------- 10. ISO ---------- */
+onShow('sim-iso',()=>{
+  const F=frame('sim-iso'),cam=makeCam(F.camHost);let prev=2;
+  const draw=raf(()=>{const i=sl.get(),off=offset(5,3,6,i);renderPark(F.cv,{gain:Math.pow(2,off),iso:ISO[i],tint:LIGHTS[3].tint,loupe:{x:250,y:300,s:56}});
+    cam.set({mode:'M',vals:[['f/4'],['1/60'],['ISO '+ISO[i],'hot']],off});});
+  const sl=makeSlider(F.ctls,{id:'iso-sl',label:'ISO',labels:ISO.map(v=>'ISO '+v),ruler:ISO,value:2,left:'czysto, ciemniej',right:'jaśniej, więcej szumu',onChange:i=>{
+    const d=i-prev,off=offset(5,3,6,i);F.say(`ISO ${ISO[prev]} → ${ISO[i]}: ${fmtStops(d)}. ${i<=2?'Obraz czysty.':i<=5?'Szum zaczyna być widać w lupie.':'Wyraźne ziarno.'} Wskaźnik: <b>${fmtThird(off)}</b>.`);
+    prev=i;if(i===5)F.goal(true);draw();}});
+  F.reset.onclick=()=>{sl.set(2);prev=2;F.ungoal();F.say('ISO 400 w ciemnym pokoju: wskaźnik <b>−3</b>, prawie nic nie widać.');draw();};
+  F.say('ISO 400 w ciemnym pokoju: wskaźnik <b>−3</b>, prawie nic nie widać.');draw();
+});
+
+/* ---------- 11. wymiana stopni ---------- */
+onShow('sim-stop',()=>{
+  const F=frame('sim-stop'),cam=makeCam(F.camHost),led=F.root.querySelector('.ledger');
+  const S0={a:2,j:5,i:2};let st=Object.assign({},S0);
+  const rows=[
+    {k:'a',n:'Przesłona',lab:()=>'f/'+AP[st.a],more:()=>st.a>0&&(st.a--,1),less:()=>st.a<8&&(st.a++,1),d:()=>S0.a-st.a},
+    {k:'j',n:'Czas',lab:()=>TM[st.j],more:()=>st.j<14&&(st.j++,1),less:()=>st.j>0&&(st.j--,1),d:()=>st.j-S0.j},
+    {k:'i',n:'ISO',lab:()=>'ISO '+ISO[st.i],more:()=>st.i<7&&(st.i++,1),less:()=>st.i>0&&(st.i--,1),d:()=>st.i-S0.i}];
+  rows.forEach(r=>{const w=document.createElement('div');w.className='xrow';
+    w.innerHTML=`<button class="btn small" type="button" aria-label="${r.n}: minus 1 stopień światła">−1 stop</button><div class="mid"><small>${r.n}</small><b></b></div><button class="btn small" type="button" aria-label="${r.n}: plus 1 stopień światła">+1 stop</button>`;
+    F.ctls.appendChild(w);r.b=w.querySelector('b');const [mi,pl]=w.querySelectorAll('button');r.mi=mi;r.pl=pl;
+    mi.onclick=()=>{if(r.less())upd(r,-1);};pl.onclick=()=>{if(r.more())upd(r,1);};});
+  function show(){const off=offset(8,st.a,st.j,st.i);
+    rows.forEach(r=>{r.b.textContent=r.lab();});
+    rows[0].mi.disabled=st.a>=8;rows[0].pl.disabled=st.a<=0;rows[1].mi.disabled=st.j<=0;rows[1].pl.disabled=st.j>=14;rows[2].mi.disabled=st.i<=0;rows[2].pl.disabled=st.i>=7;
+    cam.set({mode:'M',vals:[['f/'+AP[st.a]],[TM[st.j]],['ISO '+ISO[st.i]]],off});
+    led.innerHTML=rows.map(r=>{const d=r.d();return`<span>${r.n}: <span class="${d>0?'p':d<0?'n':''}">${d>0?'+':d<0?'−':''}${Math.abs(d)}</span></span>`;}).join('')+`<span>Razem: <b>${fmtThird(off)}</b></span>`;
+    return off;}
+  function upd(r,dir){const off=show();
+    F.say(`${r.n} → ${r.lab()}: ${dir>0?'+1 stopień (2× więcej światła)':'−1 stopień (2× mniej światła)'}. Wskaźnik: <b>${fmtThird(off)}</b>.${off===0?' <span class="g">Znowu w punkt.</span>':''}`);
+    if(st.a===4&&off===0)F.goal(true);}
+  F.reset.onclick=()=>{st=Object.assign({},S0);F.ungoal();show();F.say('Start: f/2.8, 1/125 s, ISO 400. Zdjęcie dobrze naświetlone.');};
+  show();F.say('Start: f/2.8, 1/125 s, ISO 400. Zdjęcie dobrze naświetlone.');
+});
+
+/* ---------- 12. trójkąt ---------- */
+function triRender(cv,L,a,j,i,off){renderPark(cv,{dog:true,bgBlur:dofBlur(a)*.85,dogBlur:dofBlur(a)*.3,motion:Math.min(420,2000*Tof(j)),gain:Math.pow(2,off),iso:ISO[i],tint:LIGHTS[L].tint});}
+onShow('sim-tri',()=>{
+  const F=frame('sim-tri'),cam=makeCam(F.camHost),tl=F.root.querySelector('.tasks');
+  const D={L:1,a:4,j:5,i:0};let st=Object.assign({},D),doneT=[false,false,false];
+  const TASKS=[
+    {t:'<b>Słońce:</b> zamroź psa (1/1000 s) i trzymaj wskaźnik na 0.',ok:s=>s.L===0&&s.j<=2&&s.off===0},
+    {t:'<b>Pochmurno:</b> rozmyte tło (f/2.8 albo mniej), czysto (ISO 400 lub niżej), wskaźnik na 0.',ok:s=>s.L===1&&s.a<=2&&s.i<=2&&s.off===0},
+    {t:'<b>Wnętrze</b>, Twoim obiektywem (f/4): pies prawie ostry (1/250 s), wskaźnik na 0. Ile wyszło ISO?',ok:s=>s.L===3&&s.a===3&&s.j<=4&&s.off===0}];
+  tl.innerHTML=TASKS.map(t=>`<li><span class="st" aria-hidden="true"></span><span>${t.t}</span></li>`).join('');
+  const lis=[...tl.children];
+  const seg=lightSeg(F.root.querySelector('.seg'),v=>{st.L=v;change('L');});
+  const draw=raf(()=>{const off=offset(LIGHTS[st.L].S,st.a,st.j,st.i);triRender(F.cv,st.L,st.a,st.j,st.i,off);
+    cam.set({mode:'M',vals:[['f/'+AP[st.a],last==='a'?'hot':''],[TM[st.j],last==='j'?'hot':''],['ISO '+ISO[st.i],last==='i'?'hot':'']],off});});
+  let last='';
+  function change(k,prevV){
+    const off=offset(LIGHTS[st.L].S,st.a,st.j,st.i);last=k;let m='';
+    if(k==='a'){const d=prevV-st.a;m=`Przesłona f/${AP[prevV]} → f/${AP[st.a]}: ${fmtStops(d)}. ${d>0?'Tło bardziej rozmyte.':'Tło ostrzejsze.'}`;}
+    else if(k==='j'){const d=st.j-prevV;m=`Czas ${TM[prevV]} → ${TM[st.j]}: ${fmtStops(d)}. ${d>0?'Dłużej = większa smuga psa.':'Krócej = mniejsza smuga.'}`;}
+    else if(k==='i'){const d=st.i-prevV;m=`ISO ${ISO[prevV]} → ${ISO[st.i]}: ${fmtStops(d)}. ${d>0?'Więcej szumu.':'Mniej szumu.'}`;}
+    else m=`Światło: ${LIGHTS[st.L].n}.`;
+    F.say(m+` Wskaźnik: <b>${fmtThird(clamp(off,-9,9))}</b>.`);
+    const s=Object.assign({off},st);
+    TASKS.forEach((t,n)=>{if(!doneT[n]&&t.ok(s)){doneT[n]=true;}lis[n].classList.toggle('did',doneT[n]);lis[n].firstChild.textContent=doneT[n]?'✓':'';});
+    if(doneT.every(Boolean))F.goal(true);
+    draw();
+  }
+  const sa=makeSlider(F.ctls,Object.assign({id:'tri-a',label:'Przesłona',value:st.a,left:'jaśniej',right:'ciemniej',onChange:v=>{const p=st.a;st.a=v;change('a',p);}},apRuler));
+  const sj=makeSlider(F.ctls,{id:'tri-j',label:'Czas',labels:TM,ruler:TMR,value:st.j,dense:true,left:'ciemniej',right:'jaśniej',onChange:v=>{const p=st.j;st.j=v;change('j',p);}});
+  const si=makeSlider(F.ctls,{id:'tri-i',label:'ISO',labels:ISO.map(v=>'ISO '+v),ruler:ISO,value:st.i,left:'ciemniej',right:'jaśniej',onChange:v=>{const p=st.i;st.i=v;change('i',p);}});
+  function reset(){st=Object.assign({},D);doneT=[false,false,false];sa.set(st.a);sj.set(st.j);si.set(st.i);seg.set(st.L);F.ungoal();change('');F.say('Pochmurno, f/5.6, 1/125 s, ISO 100. Jasność OK, ale pies się rozmywa. Wybierz zadanie poniżej.');}
+  F.reset.onclick=reset;reset();
+});
+
+/* ---------- 14. tryby ---------- */
+onShow('sim-mode',()=>{
+  const F=frame('sim-mode'),cam=makeCam(F.camHost),aisoEl=document.getElementById('mode-aiso');
+  const D={mode:'Av',L:1,a:3,j:5,i:0};let st=Object.assign({},D);
+  const mseg=segGroup(F.root.querySelector('[data-g="mode"]'),v=>{st.mode=v;solve('mode');});
+  const lseg=lightSeg(F.root.querySelector('[data-g="light"]'),v=>{st.L=v;solve('light');});
+  const sa=makeSlider(F.ctls,Object.assign({id:'mode-a',label:'Przesłona',value:st.a,left:'jaśniej',right:'ciemniej',onChange:v=>{st.a=v;solve('a');}},apRuler));
+  const sj=makeSlider(F.ctls,{id:'mode-j',label:'Czas',labels:TM,ruler:TMR,value:st.j,dense:true,left:'ciemniej',right:'jaśniej',onChange:v=>{st.j=v;solve('j');}});
+  const si=makeSlider(F.ctls,{id:'mode-i',label:'ISO',labels:ISO.map(v=>'ISO '+v),ruler:ISO,value:st.i,left:'ciemniej',right:'jaśniej',onChange:v=>{st.i=v;solve('i');}});
+  aisoEl.addEventListener('change',()=>solve('aiso'));
+  const draw=raf(()=>{const off=offset(LIGHTS[st.L].S,st.a,st.j,st.i);triRender(F.cv,st.L,st.a,st.j,st.i,off);});
+  function solve(){
+    const S=LIGHTS[st.L].S,ai=aisoEl.checked;let clampHit=false;
+    if(st.mode==='Av'){
+      if(ai){let ok=false;for(let i=0;i<=7;i++){const need=st.a+13-S-i;if(need<=5){st.i=i;st.j=clamp(need,0,14);ok=true;break;}}if(!ok){st.i=7;st.j=clamp(st.a+13-S-7,0,14);}}
+      else st.j=clamp(st.a+13-S-st.i,0,14);
+    }else if(st.mode==='Tv'){
+      if(ai){let ok=false;for(let i=0;i<=7;i++){const need=S+i+st.j-13;if(need>=0){st.i=i;st.a=clamp(need,0,8);ok=true;break;}}if(!ok){st.i=7;st.a=0;}}
+      else st.a=clamp(S+st.i+st.j-13,0,8);
+    }else if(ai)st.i=clamp(st.a+1+12-st.j-S,0,7);
+    const off=offset(S,st.a,st.j,st.i);clampHit=off!==0;
+    const autoA=st.mode==='Tv',autoJ=st.mode==='Av',autoI=ai;
+    sa.set(st.a);sj.set(st.j);si.set(st.i);sa.disable(autoA);sj.disable(autoJ);si.disable(autoI);
+    const cls=(auto,user)=>auto?(clampHit?'blink':'auto'):user?'hot':'';
+    cam.set({mode:st.mode,vals:[['f/'+AP[st.a],cls(autoA,st.mode==='Av'||st.mode==='M')],[TM[st.j],cls(autoJ,st.mode==='Tv'||st.mode==='M')],[(ai?'ISO ':'ISO ')+ISO[st.i],autoI?(clampHit&&st.mode!=='M'?'blink':'auto'):'']],off});
+    let m='';
+    if(st.mode==='Av')m=`<b>Av</b>: Ty wybierasz f/${AP[st.a]}. Aparat dobrał czas <b>${TM[st.j]}</b>${ai?` i ISO <b>${ISO[st.i]}</b>`:''}.`;
+    else if(st.mode==='Tv')m=`<b>Tv</b>: Ty wybierasz ${TM[st.j]}. Aparat dobrał przesłonę <b>f/${AP[st.a]}</b>${ai?` i ISO <b>${ISO[st.i]}</b>`:''}.`;
+    else m=`<b>M</b>: wszystko ustawiasz Ty${ai?`, tylko ISO dobiera aparat (<b>${ISO[st.i]}</b>)`:''}.`;
+    if(clampHit)m+=st.mode==='M'&&!ai?` Wskaźnik: <b>${fmtThird(clamp(off,-9,9))}</b>.`:` Aparatowi zabrakło zakresu: wskaźnik <b>${fmtThird(clamp(off,-9,9))}</b>, wartość miga.`;
+    F.say(m);
+    if(st.mode==='Tv'&&st.L===3&&st.j<=2&&ai&&off===0)F.goal(true);
+    draw();
+  }
+  function reset(){st=Object.assign({},D);aisoEl.checked=false;mseg.set(st.mode);lseg.set(st.L);F.ungoal();solve();}
+  F.reset.onclick=reset;reset();
+});
+
+/* ---------- 15. kompensacja ---------- */
+onShow('sim-comp',()=>{
+  const F=frame('sim-comp'),cam=makeCam(F.camHost);let sc='snow',okSnow=false,okCat=false;
+  const CFG={snow:{f:'f/8',iso:'ISO 100',t0:-9},cat:{f:'f/4',iso:'ISO 1600',t0:-5}};
+  const seg=segGroup(F.root.querySelector('.seg'),v=>{sc=v;upd();});
+  const vals=[];for(let q=-9;q<=9;q++)vals.push(q/3);
+  const sl=makeSlider(F.ctls,{id:'comp-sl',label:'Kompensacja ekspozycji',labels:vals.map(v=>fmtThird(v)),ruler:vals.map(v=>Number.isInteger(v)?fmtThird(v):'·'),value:9,left:'ciemniej',right:'jaśniej',onChange:upd});
+  function upd(){
+    const c=vals[sl.get()],S=scene(sc),meterOff=Math.log2(.18/S.avg),err=meterOff+c,gain=Math.pow(2,err),cf=CFG[sc];
+    const x=ctxOf(F.cv);x.drawImage(S.c,0,0);develop(x,{gain});
+    cam.set({mode:'Av',vals:[[cf.f],[thirdTime(cf.t0+err),'auto'],[cf.iso],['±'+fmtThird(c),'hot']],off:c});
+    const good=Math.abs(err)<=.34;
+    F.say(`Kompensacja <b>${fmtThird(c)}</b>, aparat ustawił czas ${thirdTime(cf.t0+err)}. `+(sc==='snow'?(good?'<span class="g">Śnieg jest biały.</span>':err<0?'Śnieg wyszedł szary, za ciemno.':'Za jasno, śnieg traci szczegóły.'):(good?'<span class="g">Kot jest czarny.</span>':err>0?'Czarny kot wyszedł szary, za jasno.':'Za ciemno, kot znika w cieniu.')));
+    if(good){if(sc==='snow')okSnow=true;else okCat=true;}
+    if(okSnow&&okCat)F.goal(true);
+  }
+  F.reset.onclick=()=>{sl.set(9);sc='snow';seg.set('snow');okSnow=okCat=false;F.ungoal();upd();};
+  upd();
+});
+
+/* ---------- 17. quiz ---------- */
+onShow('sim-quiz',()=>{
+  const F=frame('sim-quiz'),opts=F.root.querySelector('.quizopts'),nx=document.getElementById('quiz-next'),nEl=document.getElementById('quiz-n');
+  const Q=[
+    {r:{gain:Math.pow(2,-2.3),dog:true,motion:4},o:['Za mało światła','Za wysokie ISO','Za długa ogniskowa'],c:0,fix:'Niedoświetlone. Kompensacja na plus, mniejsza liczba f, dłuższy czas albo wyższe ISO.'},
+    {r:{dog:true,motion:110,bgBlur:1},o:['Za mała liczba f','Za długi czas naświetlania','Za niskie ISO'],c:1,fix:'Rozmyty tylko pies, a reszta ostra: pies ruszał się w trakcie. Krótszy czas: Tv i 1/500 s albo krócej.'},
+    {r:{dog:true,motion:4,iso:12800,loupe:{x:250,y:300,s:56}},o:['Poruszony aparat','Za duża liczba f','Za wysokie ISO'],c:2,fix:'Ziarno w całym kadrze, najmocniej w cieniach. Niższe ISO, więcej światła przesłoną albo czasem.'},
+    {r:{dog:true,motion:4,gain:Math.pow(2,2.3)},o:['Za dużo światła','Za krótki czas','Za mało światła'],c:0,fix:'Prześwietlone, niebo białe. Kompensacja na minus, większa liczba f albo krótszy czas.'},
+    {r:{dog:true,motion:4,shake:16},o:['Pies się ruszał','Drżące ręce: za długi czas z ręki','Za wysokie ISO'],c:1,fix:'Rozmyte jest wszystko, nawet drzewa, więc to aparat się ruszył. Czas nie dłuższy niż 1 / ogniskowa albo oprzyj aparat.'}];
+  let q=0,score=0,answered=false;
+  function show(){answered=false;nx.disabled=true;nEl.textContent=(q+1)+' / '+Q.length;renderPark(F.cv,Q[q].r);
+    opts.innerHTML=Q[q].o.map((t,k)=>`<button class="btn" type="button" data-k="${k}">${t}</button>`).join('');
+    opts.querySelectorAll('button').forEach(b=>b.onclick=()=>pick(+b.dataset.k,b));
+    nx.textContent=q<Q.length-1?'Następne zdjęcie →':'Wynik';F.say('Wybierz odpowiedź.');}
+  function pick(k,b){if(answered)return;answered=true;const ok=k===Q[q].c;if(ok)score++;
+    b.classList.add(ok?'right':'wrong');if(!ok)opts.children[Q[q].c].classList.add('right');
+    F.say((ok?'<span class="g">Dobrze!</span> ':'Prawie. ')+Q[q].fix);nx.disabled=false;nx.focus({preventScroll:true});}
+  nx.onclick=()=>{if(q<Q.length-1){q++;show();}else{document.getElementById('quiz-score').innerHTML=`Wynik: <b>${score} / ${Q.length}</b>. ${score===Q.length?'Komplet, umiesz diagnozować zdjęcia!':'Kliknij „Od nowa”, żeby spróbować jeszcze raz.'}`;F.goal(true);nx.disabled=true;}};
+  F.reset.onclick=()=>{q=0;score=0;F.ungoal();show();};
+  show();
+});
+
+/* ---------- nawigacja i postęp ---------- */
+const KEY='aparatkroki';
+const cards=[...document.querySelectorAll('#lessons > section')];
+const N=cards.length,dots=document.getElementById('dots');
+let cur=0,done=new Set(),chk={};
+try{const s=JSON.parse(localStorage.getItem(KEY)||'{}');if(Number.isInteger(s.cur))cur=clamp(s.cur,0,N-1);(s.done||[]).forEach(i=>{if(Number.isInteger(i)&&i>=0&&i<N)done.add(i);});if(s.chk&&typeof s.chk==='object')chk=s.chk;}catch(e){}
+function fromHash(){if(/^#k\d+$/.test(location.hash)){const k=+location.hash.slice(2)-1;if(k>=0&&k<N)return k;}return -1;}
+if(fromHash()>=0)cur=fromHash();
+cards.forEach((c,i)=>{const b=document.createElement('button');b.type='button';b.setAttribute('aria-label','Krok '+(i+1)+': '+c.dataset.title);b.title=(i+1)+'. '+c.dataset.title;b.onclick=()=>go(i);if(c.hasAttribute('data-ex'))b.dataset.ex='1';dots.appendChild(b);});
+function save(){try{localStorage.setItem(KEY,JSON.stringify({cur,done:[...done],chk}));}catch(e){}}
+document.querySelectorAll('.check[data-chk]').forEach(ul=>{const id=ul.dataset.chk;ul.querySelectorAll('input').forEach((inp,k)=>{const key=id+'.'+k;inp.checked=!!chk[key];inp.addEventListener('change',()=>{if(inp.checked)chk[key]=1;else delete chk[key];save();});});});
+function render(){
+  cards.forEach((c,i)=>c.hidden=i!==cur);
+  [...dots.children].forEach((d,i)=>{d.className=(i===cur?'cur ':'')+(done.has(i)?'done':d.dataset.ex?'ex':'');d.setAttribute('aria-current',i===cur?'step':'false');});
+  document.getElementById('railtxt').textContent='Krok '+(cur+1)+' z '+N+' · '+cards[cur].dataset.title;
+  document.getElementById('railpct').textContent=Math.round(done.size/N*100)+'% zrobione';
+  document.getElementById('prev').disabled=cur===0;
+  document.getElementById('next').textContent=cur===N-1?'Koniec 🎉':'Dalej →';
+  const db=document.getElementById('done');db.classList.toggle('is',done.has(cur));db.textContent=done.has(cur)?'Zrobione ✓':'Oznacz jako zrobione';
+  db.setAttribute('aria-pressed',done.has(cur)?'true':'false');
+  const fns=INIT.get(cards[cur]);if(fns){INIT.delete(cards[cur]);fns.forEach(f=>{try{f();}catch(e){console.error(e);}});}
+  save();
+}
+function go(i,noScroll){cur=clamp(i,0,N-1);render();try{history.replaceState(null,'','#k'+(cur+1));}catch(e){}if(!noScroll)window.scrollTo({top:0,behavior:reduce?'auto':'smooth'});}
+document.getElementById('prev').onclick=()=>go(cur-1);
+document.getElementById('next').onclick=()=>{done.add(cur);if(cur<N-1)go(cur+1);else render();};
+document.getElementById('done').onclick=()=>{done.has(cur)?done.delete(cur):done.add(cur);render();};
+document.addEventListener('keydown',e=>{
+  if(e.altKey||e.ctrlKey||e.metaKey)return;
+  if(e.target.closest&&e.target.closest('input,textarea,select,summary,[contenteditable]'))return;
+  if(e.key==='ArrowRight')go(cur+1);if(e.key==='ArrowLeft')go(cur-1);});
+window.addEventListener('hashchange',()=>{const k=fromHash();if(k>=0&&k!==cur)go(k);});
+const wipe=document.getElementById('wipe');let armed=false;
+wipe.onclick=()=>{if(!armed){armed=true;wipe.textContent='Na pewno? Kliknij jeszcze raz';setTimeout(()=>{armed=false;wipe.textContent='Wyczyść postęp';},4000);return;}
+  done.clear();chk={};document.querySelectorAll('.check input').forEach(i=>i.checked=false);armed=false;wipe.textContent='Wyczyszczone ✓';go(0);};
+render();
+})();
+</script>
+</body>
+</html>
